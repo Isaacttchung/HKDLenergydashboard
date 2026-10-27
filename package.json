@@ -1,14 +1,14 @@
 {
   "name": "disney-energy-gas-monitor-workspace",
   "private": true,
-  "description": "Run npm scripts from the repo root; the app lives in disney-energy-gas-monitor-b01d7ae/",
+  "description": "Run npm scripts from the repo root; the app lives in disney-energy-gas-monitor-b0035ee/",
   "scripts": {
-    "dev": "npm --prefix disney-energy-gas-monitor-b01d7ae run dev",
-    "build": "npm --prefix disney-energy-gas-monitor-b01d7ae run build",
-    "start": "npm --prefix disney-energy-gas-monitor-b01d7ae run start",
+    "dev": "npm --prefix disney-energy-gas-monitor-b0035ee run dev",
+    "build": "npm --prefix disney-energy-gas-monitor-b0035ee run build",
+    "start": "npm --prefix disney-energy-gas-monitor-b0035ee run start",
     "stop": "powershell -NoProfile -Command \"Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
     "restart": "npm run stop && npm run start",
-    "lint": "npm --prefix disney-energy-gas-monitor-b01d7ae run lint",
-    "install:app": "npm --prefix disney-energy-gas-monitor-b01d7ae install"
+    "lint": "npm --prefix disney-energy-gas-monitor-b0035ee run lint",
+    "install:app": "npm --prefix disney-energy-gas-monitor-b0035ee install"
   }
 }

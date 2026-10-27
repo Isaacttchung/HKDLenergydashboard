@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:43123](http://localhost:43123).
+Open [http://localhost:4000](http://localhost:4000).
 
 ## Data workflow
 
@@ -50,7 +50,7 @@ The sidebar **Master sheet dropbox** uploads files to `data/master-sheets/` on t
 This almost always means the browser is not talking to the same app folder you think, or the host disk was not updated.
 
 1. **Use one ngrok URL** for every teammate. Bookmarks to `localhost` on a laptop only update that laptop — not the host PC.
-2. On the **host PC**, open the dashboard locally (`http://localhost:43123` or your dev port) and check **Master sheet dropbox → Host latest EMS date** and the file modified times. They should match right after an upload from another computer.
+2. On the **host PC**, open the dashboard locally (`http://localhost:4000` or your dev port) and check **Master sheet dropbox → Host latest EMS date** and the file modified times. They should match right after an upload from another computer.
 3. Confirm **Host folder** in the sidebar matches the project you started with `npm run dev` (only one copy of the project should be running).
 4. Stop extra `npm run dev` / ngrok tunnels. Point ngrok at the single port where the host app runs.
 5. If **Extra Excel files** appears in the sidebar, delete those duplicates on the host under `data/master-sheets/` — the app only reads the four standard underscore filenames.
@@ -101,7 +101,7 @@ lib/                  Data store, aggregations, filters
 
 ## Scripts
 
-- `npm run dev` — start dev server on port 43123
+- `npm run dev` — start dev server on port 4000
 - `npm run build` — production build
 - `npm run start` — start production server
 
