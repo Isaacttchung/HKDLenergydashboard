@@ -1,0 +1,44 @@
+{
+  "relations": [
+    {
+      "id": "ccp-park-chilling",
+      "title": "CCP → Theme Park Chilling",
+      "description": "The Central Chilling Plant provides chilled water to theme park buildings. CCP electricity is not duplicated in individual ride building meters for chilling load.",
+      "appliesTo": {
+        "buildingIds": ["ccp"],
+        "groups": ["all_park", "chilling_plants"]
+      },
+      "watchFor": [
+        "CCP usage spikes on hot days",
+        "CCP vs total park electricity ratio shifts"
+      ]
+    },
+    {
+      "id": "hccp-hotel-chilling",
+      "title": "HCCP → Hotel Chilling",
+      "description": "Hotel Chilling Plant handles cooling for hotel buildings. Hotel building rows reflect non-chilling consumption only.",
+      "appliesTo": {
+        "buildingIds": ["hccp"],
+        "groups": ["all_hotels"]
+      },
+      "watchFor": [
+        "HCCP vs hotel occupancy patterns",
+        "Seasonal hotel cooling demand"
+      ]
+    },
+    {
+      "id": "solar-offset",
+      "title": "Solar → Electricity Offset",
+      "description": "Solar panels generate electricity during daylight hours. Total solar generation reduces net grid electricity demand but is tracked separately from building consumption meters.",
+      "appliesTo": {
+        "buildingIds": [],
+        "groups": ["all_solar", "all_park"]
+      },
+      "watchFor": [
+        "Solar generation vs total electricity consumption ratio",
+        "Seasonal solar output drops in cloudy/rainy months",
+        "Midday solar peaks vs CCP cooling load"
+      ]
+    }
+  ]
+}

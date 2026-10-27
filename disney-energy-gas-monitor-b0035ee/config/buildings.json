@@ -1,0 +1,168 @@
+{
+  "buildings": [
+    {
+      "id": "park",
+      "name": "Theme Park (Total)",
+      "group": "theme_park",
+      "sector": "theme_park"
+    },
+    {
+      "id": "ccp",
+      "name": "Central Chilling Plant (CCP)",
+      "group": "chilling_plant",
+      "sector": "theme_park"
+    },
+    {
+      "id": "hccp",
+      "name": "Hotel Chilling Plant (HCCP)",
+      "group": "chilling_plant",
+      "sector": "hotels"
+    },
+    {
+      "id": "dhh",
+      "name": "Disney Hollywood Hotel (DHH)",
+      "group": "hotels",
+      "sector": "hotels"
+    },
+    {
+      "id": "dlh",
+      "name": "Disneyland Hotel (DLH)",
+      "group": "hotels",
+      "sector": "hotels"
+    },
+    {
+      "id": "del",
+      "name": "Disney Explorers Lodge (DEL)",
+      "group": "hotels",
+      "sector": "hotels"
+    },
+    {
+      "id": "tp-01",
+      "name": "Theme Park — Top 10 #1",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-02",
+      "name": "Theme Park — Top 10 #2",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-03",
+      "name": "Theme Park — Top 10 #3",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-04",
+      "name": "Theme Park — Top 10 #4",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-05",
+      "name": "Theme Park — Top 10 #5",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-06",
+      "name": "Theme Park — Top 10 #6",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-07",
+      "name": "Theme Park — Top 10 #7",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-08",
+      "name": "Theme Park — Top 10 #8",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-09",
+      "name": "Theme Park — Top 10 #9",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "tp-10",
+      "name": "Theme Park — Top 10 #10",
+      "group": "theme_park",
+      "sector": "theme_park",
+      "area": "theme_park"
+    },
+    {
+      "id": "solar-total",
+      "name": "Resort Solar Total (Feed-in Tariff)",
+      "group": "solar",
+      "sector": "solar"
+    },
+    {
+      "id": "solar-park",
+      "name": "Theme Park Solar (Feed-in Tariff)",
+      "group": "solar",
+      "sector": "solar",
+      "area": "theme_park"
+    },
+    {
+      "id": "solar-hccp",
+      "name": "HCCP Solar (Feed-in Tariff)",
+      "group": "solar",
+      "sector": "solar",
+      "area": "hotels"
+    },
+    {
+      "id": "resort-gas",
+      "name": "Resort Total Gas (HCCP)",
+      "group": "gas",
+      "sector": "resort"
+    }
+  ],
+  "groups": [
+    {
+      "id": "all_park",
+      "label": "Theme Park",
+      "buildingIds": ["park", "ccp", "tp-01", "tp-02", "tp-03", "tp-04", "tp-05", "tp-06", "tp-07", "tp-08", "tp-09", "tp-10"]
+    },
+    {
+      "id": "all_hotels",
+      "label": "Hotels",
+      "buildingIds": ["hccp", "dhh", "dlh", "del"]
+    },
+    {
+      "id": "all_solar",
+      "label": "All Solar",
+      "buildingIds": ["solar-total", "solar-park", "solar-hccp"]
+    },
+    {
+      "id": "chilling_plants",
+      "label": "Chilling Plants",
+      "buildingIds": ["ccp", "hccp"]
+    },
+    {
+      "id": "hotel_breakdown",
+      "label": "Hotel Breakdown (Hollywood / Disneyland / Explorers)",
+      "buildingIds": ["dhh", "dlh", "del"]
+    },
+    {
+      "id": "top_10_park",
+      "label": "Theme Park Top 10",
+      "buildingIds": ["tp-01", "tp-02", "tp-03", "tp-04", "tp-05", "tp-06", "tp-07", "tp-08", "tp-09", "tp-10"]
+    }
+  ]
+}

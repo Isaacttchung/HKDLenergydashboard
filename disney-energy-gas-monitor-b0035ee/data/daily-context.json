@@ -1,0 +1,16 @@
+{
+  "2026-09-08": {
+    "reportTitle": "Daily Power, Gas Consumption & Solar Energy Feed-in Tariff of HCCP, CCP, Hotel and Theme Park",
+    "outdoorTempC": 28.7,
+    "ballroomUtilizationPct": 11.6,
+    "hotelOccupancyPct": 45.7,
+    "gasUnits": 10939,
+    "gasUnitLabel": "100 ft³ per unit",
+    "yoyChangePct": 9.6,
+    "notes": [
+      "Total daily power consumption for resort-wide increased 9.6% compared with the previous year.",
+      "Hotel electricity (Disney Hollywood Hotel + Disneyland Hotel + Disney Explorers Lodge) totals 65,630 kWh for this date.",
+      "Source: EMS Team daily summary report (08-Sep-2026)."
+    ]
+  }
+}

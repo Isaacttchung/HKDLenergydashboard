@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+:root {
+  --brand: #1d70b8;
+  --brand-dark: #185a9e;
+  --brand-darker: #134a82;
+  --brand-light: #e9f2f9;
+  --brand-subtle: #d4e6f5;
+  --brand-border: #b3d4ef;
+  --brand-foreground: #0d2137;
+  --brand-muted: #4a8fc9;
+  --background: var(--brand-light);
+  --foreground: var(--brand-foreground);
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --accent: var(--brand-subtle);
+  --border: var(--brand-border);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: #1d70b8;
+  --color-brand-dark: #185a9e;
+  --color-brand-darker: #134a82;
+  --color-brand-light: #e9f2f9;
+  --color-brand-subtle: #d4e6f5;
+  --color-brand-border: #b3d4ef;
+  --color-brand-foreground: #0d2137;
+  --color-brand-muted: #4a8fc9;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.resort-map-region {
+  cursor: pointer;
+  transition:
+    filter 0.15s ease,
+    stroke 0.15s ease,
+    opacity 0.2s ease;
+}
+
+.resort-map-region:hover {
+  filter: brightness(0.92);
+}
+
+.resort-map-region.resort-map-selected {
+  stroke: #0f172a;
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
+
+.resort-map-label,
+.resort-map-selected .resort-map-label,
+.resort-map-selected text,
+.resort-map-selected tspan,
+g.resort-map-selected text,
+g.resort-map-selected tspan,
+g.resort-map-region.resort-map-selected text,
+g.resort-map-region.resort-map-selected tspan {
+  stroke: none !important;
+  stroke-width: 0 !important;
+  paint-order: normal;
+}
+
+.resort-map-annotation-path {
+  stroke: none !important;
+  stroke-width: 0 !important;
+}
+
+.resort-map-region.resort-map-dimmed {
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.resort-map-region:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.resort-map-decoration {
+  cursor: default;
+}
+
+.resort-map-hidden {
+  display: none !important;
+  pointer-events: none;
+}
+
+.resort-map-host {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.resort-map-host ::selection {
+  background: transparent;
+}
+
+.custom-range-calendar {
+  --rdp-accent-color: #1d70b8;
+  --rdp-accent-background-color: #e9f2f9;
+  --rdp-range_start-date-background-color: #1d70b8;
+  --rdp-range_end-date-background-color: #1d70b8;
+  --rdp-range_middle-background-color: #d4e6f5;
+  --rdp-day-width: 30px;
+  --rdp-day-height: 30px;
+  --rdp-day_button-width: 30px;
+  --rdp-day_button-height: 30px;
+  --rdp-nav_button-width: 2rem;
+  --rdp-nav_button-height: 2rem;
+  --rdp-nav-height: 2rem;
+  --rdp-months-gap: 0;
+}
+
+.custom-range-calendar .rdp-month {
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-range-calendar .rdp-month_caption {
+  height: auto;
+  min-height: var(--rdp-nav-height);
+  flex-shrink: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  overflow: hidden;
+}
+
+.custom-range-calendar .rdp-month_grid {
+  width: max-content;
+  /* Always reserve six week rows so the caption/nav row does not shift. */
+  min-height: calc(6 * var(--rdp-day-height) + 1.75rem);
+}
+
+.custom-range-calendar .rdp-outside {
+  opacity: 0.4;
+}
+
+.custom-range-calendar .rdp-dropdowns {
+  max-width: 100%;
+}
+
+.custom-range-calendar .rdp-button_previous,
+.custom-range-calendar .rdp-button_next {
+  position: relative;
+  inset: auto;
+  display: inline-flex;
+}
+
+.custom-range-calendar .rdp-weeks {
+  margin-bottom: 0;
+}

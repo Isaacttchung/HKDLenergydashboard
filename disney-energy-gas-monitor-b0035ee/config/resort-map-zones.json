@@ -1,0 +1,1959 @@
+{
+  "zones": [
+    {
+      "id": "hotels",
+      "parent": null,
+      "label": "Hotels",
+      "hits": [
+        "Hotels_2"
+      ],
+      "overlay": "Hotels_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "csb",
+          "hccp",
+          "del",
+          "dhh",
+          "dlh"
+        ]
+      }
+    },
+    {
+      "id": "csb",
+      "parent": "hotels",
+      "label": "CSB",
+      "hits": [
+        "CSB"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "hotel",
+        "metric": "csb"
+      }
+    },
+    {
+      "id": "hccp",
+      "parent": "hotels",
+      "label": "HCCP",
+      "hits": [
+        "HCCP"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "hotel",
+        "metric": "hccp"
+      }
+    },
+    {
+      "id": "del",
+      "parent": "hotels",
+      "label": "DEL",
+      "hits": [
+        "DEL"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "hotel",
+        "metric": "del"
+      }
+    },
+    {
+      "id": "dhh",
+      "parent": "hotels",
+      "label": "DHH",
+      "hits": [
+        "DHH"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "hotel",
+        "metric": "dhh"
+      }
+    },
+    {
+      "id": "dlh",
+      "parent": "hotels",
+      "label": "DLH",
+      "hits": [
+        "DLH"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "hotel",
+        "metric": "dlh"
+      }
+    },
+    {
+      "id": "pti",
+      "parent": null,
+      "label": "Public Transport Interchange",
+      "hits": [
+        "Public Transport Interchange_2"
+      ],
+      "overlay": "Public Transport Interchange_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "701",
+          "702",
+          "bus_taxi",
+          "801",
+          "802",
+          "803",
+          "804_pti",
+          "ss200_804",
+          "ss211"
+        ]
+      }
+    },
+    {
+      "id": "701",
+      "parent": "pti",
+      "label": "701",
+      "hits": [
+        "701"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "701"
+        ]
+      }
+    },
+    {
+      "id": "702",
+      "parent": "pti",
+      "label": "702",
+      "hits": [
+        "702"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "702"
+        ]
+      }
+    },
+    {
+      "id": "bus_taxi",
+      "parent": "pti",
+      "label": "Bus and Taxi",
+      "hits": [
+        "Bus and Taxi"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "801",
+      "parent": "pti",
+      "label": "801",
+      "hits": [
+        "801"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "801"
+        ]
+      }
+    },
+    {
+      "id": "802",
+      "parent": "pti",
+      "label": "802",
+      "hits": [
+        "802"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "802"
+        ]
+      }
+    },
+    {
+      "id": "803",
+      "parent": "pti",
+      "label": "803",
+      "hits": [
+        "803"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "803",
+          "803 (805 / 807 / 808 / 809ABC)"
+        ]
+      }
+    },
+    {
+      "id": "804_pti",
+      "parent": "pti",
+      "label": "804",
+      "hits": [
+        "/804"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss200_804",
+      "parent": "pti",
+      "label": "SS200/804",
+      "hits": [
+        "SS200/804"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss211",
+      "parent": "pti",
+      "label": "SS211",
+      "hits": [
+        "SS211"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "theme_park",
+      "parent": null,
+      "label": "Theme Park",
+      "hits": [
+        "Theme Park_2"
+      ],
+      "overlay": "Theme Park_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "main_entrance",
+          "main_street",
+          "park_promenade",
+          "adventureland",
+          "tomorrowland",
+          "fantasyland",
+          "grizzly_gulch",
+          "mystic_point",
+          "toy_story_land",
+          "pixar",
+          "world_of_frozen",
+          "back_of_house"
+        ]
+      }
+    },
+    {
+      "id": "world_of_frozen",
+      "parent": "theme_park",
+      "label": "World of Frozen",
+      "hits": [
+        "World of Frozen_2"
+      ],
+      "overlay": "World of Frozen_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "121",
+          "122",
+          "123",
+          "124",
+          "126",
+          "606_410",
+          "622"
+        ]
+      }
+    },
+    {
+      "id": "121",
+      "parent": "world_of_frozen",
+      "label": "121",
+      "hits": [
+        "121"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Frozen 121 EMSB",
+          "Frozen 121 MSB Frozen Ever After & Tick Tock Toy's & Collectibles",
+          "Frozen 121 EMSB2",
+          "Frozen 121 Ride - RCCB1",
+          "Frozen 121 Ride - RCCB2",
+          "Frozen 121 Ride - RCCB3",
+          "Frozen 121 Ride - RCCB4",
+          "Frozen 121 Ride - MCCB1",
+          "Frozen 121 Ride - MCCB2",
+          "Frozen 121 AHU - MCCB3",
+          "Frozen 121 Ride - IMCB2",
+          "Frozen 121 LIFT",
+          "Frozen 121 MOBILE ROOM"
+        ]
+      }
+    },
+    {
+      "id": "122",
+      "parent": "world_of_frozen",
+      "label": "122",
+      "hits": [
+        "122"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Frozen 122 MSB Golden Crocus INN & Restroom",
+          "Frozen 122 EMSB",
+          "Frozen 122 EMSB2",
+          "Frozen 122 Kitchen - PWR"
+        ]
+      }
+    },
+    {
+      "id": "123",
+      "parent": "world_of_frozen",
+      "label": "123",
+      "hits": [
+        "123"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Frozen 123 MSB Northern Delights",
+          "Frozen ESMB209A (122 / 123 / 126 Fire Serivce)",
+          "Frozen ESMB209B (122 / 123 / 126 NON Fire Serivce)",
+          "Frozen ESMB209A-A",
+          "Frozen ESMB209A-B",
+          "Frozen 123 EMSB",
+          "Frozen 123 EMSB2",
+          "Frozen 123 Kitchen - PWR"
+        ]
+      }
+    },
+    {
+      "id": "124",
+      "parent": "world_of_frozen",
+      "label": "124",
+      "hits": [
+        "124"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Frozen 124 MSB Prop Castle (Pump - Lake)",
+          "Frozen ESMB209A (121 / 124 Fire Serivce)",
+          "Frozen ESMB209B (121 / 124 NON Fire Serivce)",
+          "Frozen 124 EMSB",
+          "Frozen 124 EMSB2",
+          "Frozen 124 RMCC5 Prop Castle (Pump - Ride)"
+        ]
+      }
+    },
+    {
+      "id": "126",
+      "parent": "world_of_frozen",
+      "label": "126",
+      "hits": [
+        "126"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Frozen 126 EMSB",
+          "Frozen ESMB209B-A",
+          "Frozen ESMB209B-B",
+          "Frozen 126 MSB Wandering Oaken's Sliding Sleighs & Restroom",
+          "Frozen 126 MSB",
+          "Frozen 126 Ride - RMCC1",
+          "Frozen 126 Ride - RMCC2",
+          "Frozen 126 Ride - MCCB1",
+          "Frozen 126 Ride - MCCB2",
+          "Frozen 126 ENT - ESE101",
+          "Frozen 126 ENT - MCCB5"
+        ]
+      }
+    },
+    {
+      "id": "606_410",
+      "parent": "world_of_frozen",
+      "label": "606/410",
+      "hits": [
+        "606/410"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "606 (410)"
+        ]
+      }
+    },
+    {
+      "id": "622",
+      "parent": "world_of_frozen",
+      "label": "622",
+      "hits": [
+        "622"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "622 Water Tank Plant #2 Cleansing Pumps MCC2",
+          "622 Water Tank Plant #2 Flushing Pump",
+          "622 F.S. Sprinkler Pump",
+          "622 F.S. Hose Reel Pump"
+        ]
+      }
+    },
+    {
+      "id": "pixar",
+      "parent": "theme_park",
+      "label": "Pixar",
+      "hits": [
+        "Pixar_2"
+      ],
+      "overlay": "Pixar_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "559"
+        ]
+      }
+    },
+    {
+      "id": "559",
+      "parent": "pixar",
+      "label": "559",
+      "hits": [
+        "559"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "559 Project EVE"
+        ]
+      }
+    },
+    {
+      "id": "toy_story_land",
+      "parent": "theme_park",
+      "label": "Toy Story Land",
+      "hits": [
+        "Toy Story Land_2"
+      ],
+      "overlay": "Toy Story Land_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "551",
+          "552_642",
+          "553",
+          "554",
+          "558"
+        ]
+      }
+    },
+    {
+      "id": "551",
+      "parent": "toy_story_land",
+      "label": "551",
+      "hits": [
+        "551"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "551",
+          "Ride RCP 10/12 & MCC11 / MCC12",
+          "HV"
+        ]
+      }
+    },
+    {
+      "id": "552_642",
+      "parent": "toy_story_land",
+      "label": "552 / 642",
+      "hits": [
+        "552",
+        "642"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "552",
+          "552 / 642"
+        ]
+      }
+    },
+    {
+      "id": "553",
+      "parent": "toy_story_land",
+      "label": "553",
+      "hits": [
+        "553"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "553"
+        ]
+      }
+    },
+    {
+      "id": "554",
+      "parent": "toy_story_land",
+      "label": "554",
+      "hits": [
+        "554"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "554"
+        ]
+      }
+    },
+    {
+      "id": "558",
+      "parent": "toy_story_land",
+      "label": "558",
+      "hits": [
+        "558"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "558"
+        ]
+      }
+    },
+    {
+      "id": "mystic_point",
+      "parent": "theme_park",
+      "label": "Mystic Point",
+      "hits": [
+        "Mystic Point_2"
+      ],
+      "overlay": "Mystic Point_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "531"
+        ]
+      }
+    },
+    {
+      "id": "531",
+      "parent": "mystic_point",
+      "label": "531",
+      "hits": [
+        "531"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "531"
+        ]
+      }
+    },
+    {
+      "id": "grizzly_gulch",
+      "parent": "theme_park",
+      "label": "Grizzly Gulch",
+      "hits": [
+        "Grizzly Gulch_2"
+      ],
+      "overlay": "Grizzly Gulch_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "521",
+          "522"
+        ]
+      }
+    },
+    {
+      "id": "521",
+      "parent": "grizzly_gulch",
+      "label": "521",
+      "hits": [
+        "521"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "521",
+          "Grizzly Gulch ACB"
+        ]
+      }
+    },
+    {
+      "id": "522",
+      "parent": "grizzly_gulch",
+      "label": "522",
+      "hits": [
+        "522"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "522"
+        ]
+      }
+    },
+    {
+      "id": "fantasyland",
+      "parent": "theme_park",
+      "label": "Fantasyland",
+      "hits": [
+        "Fantasy Land_2"
+      ],
+      "overlay": "Fantasy Land_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "401",
+          "402_408_409",
+          "403_405",
+          "404",
+          "407",
+          "411",
+          "412",
+          "413",
+          "414",
+          "419"
+        ]
+      }
+    },
+    {
+      "id": "401",
+      "parent": "fantasyland",
+      "label": "401",
+      "hits": [
+        "401"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "401A",
+          "401A EMSB1 (FSI Load) / EMSB2 (Non-FSI Load)",
+          "401A MSB-2"
+        ]
+      }
+    },
+    {
+      "id": "402_408_409",
+      "parent": "fantasyland",
+      "label": "402 / 408 / 409",
+      "hits": [
+        "402",
+        "408",
+        "409"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "402 / 408 / 409"
+        ]
+      }
+    },
+    {
+      "id": "403_405",
+      "parent": "fantasyland",
+      "label": "403 / 405",
+      "hits": [
+        "403",
+        "405"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "403 / 405"
+        ]
+      }
+    },
+    {
+      "id": "404",
+      "parent": "fantasyland",
+      "label": "404",
+      "hits": [
+        "404"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "404"
+        ]
+      }
+    },
+    {
+      "id": "407",
+      "parent": "fantasyland",
+      "label": "407",
+      "hits": [
+        "407"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "407"
+        ]
+      }
+    },
+    {
+      "id": "411",
+      "parent": "fantasyland",
+      "label": "411",
+      "hits": [
+        "411"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "411"
+        ]
+      }
+    },
+    {
+      "id": "412",
+      "parent": "fantasyland",
+      "label": "412",
+      "hits": [
+        "412"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "412"
+        ]
+      }
+    },
+    {
+      "id": "413",
+      "parent": "fantasyland",
+      "label": "413",
+      "hits": [
+        "413"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "413"
+        ]
+      }
+    },
+    {
+      "id": "414",
+      "parent": "fantasyland",
+      "label": "414",
+      "hits": [
+        "414"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "414"
+        ]
+      }
+    },
+    {
+      "id": "419",
+      "parent": "fantasyland",
+      "label": "419",
+      "hits": [
+        "419"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "416A (419)"
+        ]
+      }
+    },
+    {
+      "id": "tomorrowland",
+      "parent": "theme_park",
+      "label": "Tomorrowland",
+      "hits": [
+        "Tommorow Land_2"
+      ],
+      "overlay": "Tommorow Land_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "301",
+          "302",
+          "303",
+          "304_307",
+          "305",
+          "311_312",
+          "310m_310s",
+          "316"
+        ]
+      }
+    },
+    {
+      "id": "301",
+      "parent": "tomorrowland",
+      "label": "301",
+      "hits": [
+        "301"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "301"
+        ]
+      }
+    },
+    {
+      "id": "302",
+      "parent": "tomorrowland",
+      "label": "302",
+      "hits": [
+        "302"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "302"
+        ]
+      }
+    },
+    {
+      "id": "303",
+      "parent": "tomorrowland",
+      "label": "303",
+      "hits": [
+        "303"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "303"
+        ]
+      }
+    },
+    {
+      "id": "304_307",
+      "parent": "tomorrowland",
+      "label": "304/307",
+      "hits": [
+        "304/307"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "304"
+        ]
+      }
+    },
+    {
+      "id": "305",
+      "parent": "tomorrowland",
+      "label": "305",
+      "hits": [
+        "305"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "305"
+        ]
+      }
+    },
+    {
+      "id": "311_312",
+      "parent": "tomorrowland",
+      "label": "311/312",
+      "hits": [
+        "311/312"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "310m_310s",
+      "parent": "tomorrowland",
+      "label": "310M/310S",
+      "hits": [
+        "310M/310S"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "310S / 310M"
+        ]
+      }
+    },
+    {
+      "id": "316",
+      "parent": "tomorrowland",
+      "label": "316",
+      "hits": [
+        "316"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "316"
+        ]
+      }
+    },
+    {
+      "id": "adventureland",
+      "parent": "theme_park",
+      "label": "Adventureland",
+      "hits": [
+        "Adventure Land_2"
+      ],
+      "overlay": "Adventure Land_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "501_502",
+          "505",
+          "506_507_509",
+          "508",
+          "516",
+          "563",
+          "564"
+        ]
+      }
+    },
+    {
+      "id": "501_502",
+      "parent": "adventureland",
+      "label": "501 / 502",
+      "hits": [
+        "501",
+        "502"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "501 / 502"
+        ]
+      }
+    },
+    {
+      "id": "505",
+      "parent": "adventureland",
+      "label": "505",
+      "hits": [
+        "505"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "505"
+        ]
+      }
+    },
+    {
+      "id": "506_507_509",
+      "parent": "adventureland",
+      "label": "506 / 507 / 509",
+      "hits": [
+        "506",
+        "507",
+        "509"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "506 / 507 / 509"
+        ]
+      }
+    },
+    {
+      "id": "508",
+      "parent": "adventureland",
+      "label": "508",
+      "hits": [
+        "508"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "508"
+        ]
+      }
+    },
+    {
+      "id": "516",
+      "parent": "adventureland",
+      "label": "516",
+      "hits": [
+        "516"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "516 The Pavilion (516 Demon Jungle) Switch 1",
+          "516 The Pavilion (516 Marquee Tent) Switch 2",
+          "516 Air Compressor Plant (CA-5)",
+          "516 Air Dryer (CA1, CA2, CA3, CA4, CA5)",
+          "516 Air Compressor Plant (CA-4)"
+        ]
+      }
+    },
+    {
+      "id": "563",
+      "parent": "adventureland",
+      "label": "563",
+      "hits": [
+        "563"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "563 River Show Enhancement"
+        ]
+      }
+    },
+    {
+      "id": "564",
+      "parent": "adventureland",
+      "label": "564",
+      "hits": [
+        "564"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "502 / 564"
+        ]
+      }
+    },
+    {
+      "id": "park_promenade",
+      "parent": "theme_park",
+      "label": "Park Promenade",
+      "hits": [
+        "Park Promenade_2"
+      ],
+      "overlay": "Park Promenade_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "907",
+          "908",
+          "909"
+        ]
+      }
+    },
+    {
+      "id": "907",
+      "parent": "park_promenade",
+      "label": "907",
+      "hits": [
+        "907"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "907",
+          "907 Lighting Dimmer Cabinet ADC91a"
+        ]
+      }
+    },
+    {
+      "id": "908",
+      "parent": "park_promenade",
+      "label": "908",
+      "hits": [
+        "908"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "908"
+        ]
+      }
+    },
+    {
+      "id": "909",
+      "parent": "park_promenade",
+      "label": "909",
+      "hits": [
+        "909"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "909"
+        ]
+      }
+    },
+    {
+      "id": "main_street",
+      "parent": "theme_park",
+      "label": "Main Street",
+      "hits": [
+        "Main Street_2"
+      ],
+      "overlay": "Main Street_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "203",
+          "204",
+          "205",
+          "206",
+          "207",
+          "208",
+          "209",
+          "211",
+          "216"
+        ]
+      }
+    },
+    {
+      "id": "203",
+      "parent": "main_street",
+      "label": "203",
+      "hits": [
+        "203"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "203"
+        ]
+      }
+    },
+    {
+      "id": "204",
+      "parent": "main_street",
+      "label": "204",
+      "hits": [
+        "204"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "204"
+        ]
+      }
+    },
+    {
+      "id": "205",
+      "parent": "main_street",
+      "label": "205",
+      "hits": [
+        "205"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "205"
+        ]
+      }
+    },
+    {
+      "id": "206",
+      "parent": "main_street",
+      "label": "206",
+      "hits": [
+        "206"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "206"
+        ]
+      }
+    },
+    {
+      "id": "207",
+      "parent": "main_street",
+      "label": "207",
+      "hits": [
+        "207"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "207"
+        ]
+      }
+    },
+    {
+      "id": "208",
+      "parent": "main_street",
+      "label": "208",
+      "hits": [
+        "208"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "208",
+          "208 New Starbucks"
+        ]
+      }
+    },
+    {
+      "id": "209",
+      "parent": "main_street",
+      "label": "209",
+      "hits": [
+        "209"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "209"
+        ]
+      }
+    },
+    {
+      "id": "211",
+      "parent": "main_street",
+      "label": "211",
+      "hits": [
+        "211"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "211"
+        ]
+      }
+    },
+    {
+      "id": "216",
+      "parent": "main_street",
+      "label": "216",
+      "hits": [
+        "216"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "216 Plaza Grounds (Duffy Play House)"
+        ]
+      }
+    },
+    {
+      "id": "main_entrance",
+      "parent": "theme_park",
+      "label": "Main Entrance",
+      "hits": [
+        "Main Entrance_2"
+      ],
+      "overlay": "Main Entrance_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "201",
+          "202",
+          "214"
+        ]
+      }
+    },
+    {
+      "id": "201",
+      "parent": "main_entrance",
+      "label": "201",
+      "hits": [
+        "201"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "202",
+      "parent": "main_entrance",
+      "label": "202",
+      "hits": [
+        "202"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "202"
+        ]
+      }
+    },
+    {
+      "id": "214",
+      "parent": "main_entrance",
+      "label": "214",
+      "hits": [
+        "214"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "214"
+        ]
+      }
+    },
+    {
+      "id": "back_of_house",
+      "parent": "theme_park",
+      "label": "Back of House",
+      "hits": [
+        "Back of House_2"
+      ],
+      "overlay": "Back of House_2",
+      "data": {
+        "type": "aggregate",
+        "childIds": [
+          "416",
+          "443",
+          "602",
+          "603",
+          "604",
+          "605",
+          "609",
+          "610",
+          "613",
+          "614",
+          "620",
+          "621",
+          "623",
+          "624",
+          "625",
+          "641",
+          "643",
+          "645",
+          "ccp",
+          "db_b",
+          "db_c",
+          "ev_202a",
+          "ev_204a",
+          "ev_206b",
+          "gla_tunnel",
+          "laydown",
+          "old_wdi",
+          "ss201",
+          "ss202",
+          "ss203",
+          "ss204",
+          "ss205",
+          "ss206",
+          "ss207",
+          "ss208",
+          "ss210",
+          "552_642"
+        ]
+      }
+    },
+    {
+      "id": "416",
+      "parent": "back_of_house",
+      "label": "416",
+      "hits": [
+        "416"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "416 Air Compressor Plant (CA-1)",
+          "416 Air Compressor Plant (CA-2)",
+          "562 (416) River Show Water Filtration Plant",
+          "416 Air Compressor Plant (CA-3)"
+        ]
+      }
+    },
+    {
+      "id": "443",
+      "parent": "back_of_house",
+      "label": "443",
+      "hits": [
+        "443"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "443 Air Compressor Plant (for 416 & 516)"
+        ]
+      }
+    },
+    {
+      "id": "602",
+      "parent": "back_of_house",
+      "label": "602",
+      "hits": [
+        "602"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "602"
+        ]
+      }
+    },
+    {
+      "id": "603",
+      "parent": "back_of_house",
+      "label": "603",
+      "hits": [
+        "603"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "603"
+        ]
+      }
+    },
+    {
+      "id": "604",
+      "parent": "back_of_house",
+      "label": "604",
+      "hits": [
+        "604"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "604"
+        ]
+      }
+    },
+    {
+      "id": "605",
+      "parent": "back_of_house",
+      "label": "605",
+      "hits": [
+        "605"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "605B"
+        ]
+      }
+    },
+    {
+      "id": "609",
+      "parent": "back_of_house",
+      "label": "609",
+      "hits": [
+        "609"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "609",
+          "609 NCC Data Center"
+        ]
+      }
+    },
+    {
+      "id": "610",
+      "parent": "back_of_house",
+      "label": "610",
+      "hits": [
+        "610"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "610 Horticulture Support",
+          "610 (612) Waste Management",
+          "610 Container"
+        ]
+      }
+    },
+    {
+      "id": "613",
+      "parent": "back_of_house",
+      "label": "613",
+      "hits": [
+        "613"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "613",
+          "613A"
+        ]
+      }
+    },
+    {
+      "id": "614",
+      "parent": "back_of_house",
+      "label": "614",
+      "hits": [
+        "614"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "614 Town Gas Mixing Station"
+        ]
+      }
+    },
+    {
+      "id": "620",
+      "parent": "back_of_house",
+      "label": "620",
+      "hits": [
+        "620"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "620 MSB Staging / Receiving",
+          "620 EMSB Staging / Receiving"
+        ]
+      }
+    },
+    {
+      "id": "621",
+      "parent": "back_of_house",
+      "label": "621",
+      "hits": [
+        "621"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "621 Water Tank Plant #1 Cleansing Pump",
+          "621 Water Tank Plant #1 Flushing Pump",
+          "621 F.S. Hose Reel Pump",
+          "621 F.S. Sprinkler Pump"
+        ]
+      }
+    },
+    {
+      "id": "623",
+      "parent": "back_of_house",
+      "label": "623",
+      "hits": [
+        "623"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "623",
+          "623 Water Tank Plant #3 Flushing Pump",
+          "623 F.S. Sprinkler Pump",
+          "623 F.S. Hose Reel Pump"
+        ]
+      }
+    },
+    {
+      "id": "624",
+      "parent": "back_of_house",
+      "label": "624",
+      "hits": [
+        "624"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "624",
+          "624 Water Tank Plant - Flushing Pump"
+        ]
+      }
+    },
+    {
+      "id": "625",
+      "parent": "back_of_house",
+      "label": "625",
+      "hits": [
+        "625"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "625 F.S. Sprinkler Pump MCC1",
+          "625 F.S. Hose Reel Pump MCC2"
+        ]
+      }
+    },
+    {
+      "id": "641",
+      "parent": "back_of_house",
+      "label": "641",
+      "hits": [
+        "641"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "641"
+        ]
+      }
+    },
+    {
+      "id": "643",
+      "parent": "back_of_house",
+      "label": "643",
+      "hits": [
+        "643"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "643"
+        ]
+      }
+    },
+    {
+      "id": "645",
+      "parent": "back_of_house",
+      "label": "645",
+      "hits": [
+        "645"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "645"
+        ]
+      }
+    },
+    {
+      "id": "ccp",
+      "parent": "back_of_house",
+      "label": "CCP",
+      "hits": [
+        "CCP"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Sum CCP1"
+        ]
+      }
+    },
+    {
+      "id": "db_b",
+      "parent": "back_of_house",
+      "label": "DB Container Location B",
+      "hits": [
+        "DB Container Location B"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "DB-Contianer Location B"
+        ]
+      }
+    },
+    {
+      "id": "db_c",
+      "parent": "back_of_house",
+      "label": "DB Container Location C",
+      "hits": [
+        "DB Container Location C"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "DB-Contianer Location C"
+        ]
+      }
+    },
+    {
+      "id": "ev_202a",
+      "parent": "back_of_house",
+      "label": "EV Charger-202A_A8",
+      "hits": [
+        "EV Charger-202A_A8"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "EV Charger"
+        ]
+      }
+    },
+    {
+      "id": "ev_204a",
+      "parent": "back_of_house",
+      "label": "EV Charger-204A_A6",
+      "hits": [
+        "EV Charger-204A_A6"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "634 EV Charge"
+        ]
+      }
+    },
+    {
+      "id": "ev_206b",
+      "parent": "back_of_house",
+      "label": "EV Charger-206B_B5",
+      "hits": [
+        "EV Charger-206B_B5"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "636 MCB2 - EV Charge"
+        ]
+      }
+    },
+    {
+      "id": "gla_tunnel",
+      "parent": "back_of_house",
+      "label": "GLA Service Tunnel",
+      "hits": [
+        "GLA Service Tunnel"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "GLA Service Tunnel"
+        ]
+      }
+    },
+    {
+      "id": "laydown",
+      "parent": "back_of_house",
+      "label": "Laydown Yard",
+      "hits": [
+        "Laydown Yard"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Laydown Yard Switch Cabinet"
+        ]
+      }
+    },
+    {
+      "id": "old_wdi",
+      "parent": "back_of_house",
+      "label": "OLD WDI",
+      "hits": [
+        "OLD WDI"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "top10",
+        "locations": [
+          "Old WDI Office / Canteen"
+        ]
+      }
+    },
+    {
+      "id": "ss201",
+      "parent": "back_of_house",
+      "label": "SS201",
+      "hits": [
+        "SS201"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss202",
+      "parent": "back_of_house",
+      "label": "SS202",
+      "hits": [
+        "SS202"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss203",
+      "parent": "back_of_house",
+      "label": "SS203",
+      "hits": [
+        "SS203"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss204",
+      "parent": "back_of_house",
+      "label": "SS204",
+      "hits": [
+        "SS204"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss205",
+      "parent": "back_of_house",
+      "label": "SS205",
+      "hits": [
+        "SS205"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss206",
+      "parent": "back_of_house",
+      "label": "SS206",
+      "hits": [
+        "SS206"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss207",
+      "parent": "back_of_house",
+      "label": "SS207",
+      "hits": [
+        "SS207"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss208",
+      "parent": "back_of_house",
+      "label": "SS208",
+      "hits": [
+        "SS208"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    },
+    {
+      "id": "ss210",
+      "parent": "back_of_house",
+      "label": "SS210",
+      "hits": [
+        "SS210"
+      ],
+      "overlay": null,
+      "data": {
+        "type": "empty",
+        "message": "No recorded data yet"
+      }
+    }
+  ]
+}

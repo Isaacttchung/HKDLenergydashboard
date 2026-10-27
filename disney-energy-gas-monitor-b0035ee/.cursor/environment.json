@@ -1,0 +1,20 @@
+{
+  "name": "HKDL Energy Dashboard",
+  "env": {
+    "MASTER_SHEET_UPLOAD_TOKEN": "12345"
+  },
+  "install": "npm install",
+  "ports": [
+    {
+      "name": "dashboard",
+      "port": 43123
+    }
+  ],
+  "terminals": [
+    {
+      "name": "dashboard-dev",
+      "command": "npm run dev",
+      "description": "Next.js dashboard on http://127.0.0.1:43123"
+    }
+  ]
+}

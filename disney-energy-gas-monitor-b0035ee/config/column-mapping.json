@@ -1,0 +1,7 @@
+{
+  "date": "date",
+  "source_id": "source_id",
+  "energy_type": "energy_type",
+  "value_kwh": "value_kwh",
+  "cost_hkd": "cost_hkd"
+}
