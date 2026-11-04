@@ -110,3 +110,131 @@ lib/                  Data store, aggregations, filters
 - **Next:** Run on your PC, then move to a dedicated local server (auth + Cloudflare Tunnel)
 - **Optional later:** Raw CSV → master sheet automation
 - **Optional later:** Local AI analysis
+
+## Raw data upload (Mode A)
+
+Master sheet dropbox behavior added Nov 2026 (operators and developers).
+
+### Summary
+
+The dropbox accepts **exactly one** of two upload bundles per attempt:
+
+| Mode | What to upload | Result |
+|------|----------------|--------|
+| **A — Raw conversion** | **26** raw CSV files **+** **`HKDL Daily Feed-in Tariff Report.xlsx`** (27 files total) | Converts data into master workbooks on disk, clears cache, refreshes the dashboard |
+| **B — Master replace** | All **four** canonical master Excel workbooks together | Replaces files under `data/master-sheets/` (same as before this feature) |
+
+Mixed or partial batches are **rejected** (for example 26 raws without feed-in, or raws mixed with only some masters).
+
+Users do **not** upload the internal formula workbook (`Formula-DailyWeb4.xlsm`); conversion rules are baked into the app.
+
+### Mode A — what gets converted
+
+| Master workbook | From raw data? | Notes |
+|-----------------|----------------|-------|
+| **HKDL_Top_10.xlsx** (`WebSS_Data`) | Yes | Mappings from RawData spec; outdoor air temperature from **`CCP+HCCP Daily1`** (column BY, daily average → row 301) |
+| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_CCP**, **Mercury_HCCP**, **Mercury_Hotel**, **Mercury_Park** |
+| **HKDL Daily Feed-in Tariff Report.xlsx** | Uploaded as input | Required for solar / feed-in calculations; not produced from raws alone |
+| **HCCP_Gas_Consumption_report.xlsx** | No (yet) | Still upload via **Mode B** or future work |
+
+After a successful Mode A run, **Top_10** and **Power_Solar** masters are updated on disk. Gas master is unchanged unless you upload masters in Mode B.
+
+### Required raw files (26)
+
+Logical ids (filename suffix `_YYYYMMDDHHMMSS` is ignored; spaces vs underscores are normalized):
+
+1. `Mercury_CCP`
+2. `Mercury_HCCP`
+3. `Mercury_Hotel`
+4. `Mercury_Park`
+5. `SS200_TxA_1`
+6. `SS201_TxA_1`
+7. `SS201_TxB_1`
+8. `SS201_TxC_1`
+9. `SS202_TxA_1`
+10. `SS202_TxB_1`
+11. `SS203_TxA_1`
+12. `SS203_TxB_1`
+13. `SS203_TxC_1`
+14. `SS204_TxA_1`
+15. `SS204_TxB_1`
+16. `SS206_TxA_1`
+17. `SS206_TxB_1`
+18. `SS207_TxA`
+19. `SS207_TxB`
+20. `SS208_TxA_HV`
+21. `SS210_TxA_1`
+22. `SS211_TxA_1`
+23. `SS221_HV`
+24. `209-121-126`
+25. `209-MeterB`
+26. **`CCP+HCCP Daily1`**
+
+**Not required:** `CCP_COP_kWh`.
+
+**Plus one master for Mode A:** `HKDL Daily Feed-in Tariff Report.xlsx` (must include a row for the batch **data date**).
+
+### Data date rules
+
+- Every raw CSV must share the same calendar **data date**, taken from the **`Timestamp`** column.
+- If dates differ across files, upload fails with an error asking for a consistent set.
+- Feed-in master must contain values for that same date where formulas require feed-in.
+
+### Duplicate date
+
+If that **data date** already exists in the masters / dashboard:
+
+- Upload stops before overwriting.
+- UI prompts: **Replace** or **Cancel**.
+- **Replace** runs conversion again and overwrites that date’s column.
+- **Cancel** leaves disk unchanged.
+
+Same behavior applies when uploading **four masters** (Mode B) if that date column already exists.
+
+### Blocking errors
+
+Upload fails (no master write) when for example:
+
+- Missing or extra files for the chosen mode
+- Raw **Timestamp** dates do not match across the 26 files
+- Feed-in master has no row for the batch date (when required)
+- A meter/location row required for **Top_10** is missing in `WebSS_Data` (rows are **never** auto-added)
+
+On missing master rows, the UI can offer a **download of the current master** to fix offline, then re-upload.
+
+### Warnings (non-blocking)
+
+Conversion **completes** and the dashboard **updates** even when warnings fire. A dialog lists issues and may offer downloads of flagged **raw CSVs** and affected **masters** (Top_10 and Power_Solar when those pipelines ran).
+
+| Warning | Meaning |
+|---------|---------|
+| **LOW_DATA_COUNT** | Fewer than 70 data rows between first and last reading for a column (possible gaps) |
+| **CUMULATIVE_DECREASE** | Cumulative kWh decreased row-to-row (equal is OK) |
+| **NEGATIVE_DELTA** | Daily total (last − first non-empty) is negative |
+
+Bad source data (for example known REC glitches) is **not** auto-corrected; fix manually and re-upload.
+
+### Default kWh rule
+
+For each meter column: **last non-empty cumulative kWh − first non-empty cumulative kWh** for that day, unless a specific mapping uses REC or feed-in formulas (Top_10 / Power_Solar).
+
+### Code locations (developers)
+
+| Area | Path |
+|------|------|
+| Upload API | `app/api/master-sheets/upload/route.ts` |
+| Download after warnings | `app/api/master-sheets/download/route.ts` |
+| Batch classification | `lib/upload/batch-classifier.ts` |
+| Mode A orchestration | `lib/upload/raw-upload-stub.ts` |
+| Raw CSV warnings | `lib/raw-csv-validation.ts` |
+| Top_10 conversion | `lib/raw-to-master/top-10.ts` |
+| Power Solar conversion | `lib/raw-to-master/power-solar.ts` |
+| UI | `components/dashboard/master-sheet-upload.tsx`, `duplicate-date-dialog.tsx`, `upload-warnings-dialog.tsx` |
+
+Tests: `lib/**/*.test.ts`, golden tests under `lib/raw-to-master/*golden*`.
+
+### Not in this release
+
+- Raw → **HCCP_Gas** conversion
+- Optional “download all four masters” on clean success with no warnings
+- Monthly / yearly PDF reports (dashboard remains **daily-only** by design)
