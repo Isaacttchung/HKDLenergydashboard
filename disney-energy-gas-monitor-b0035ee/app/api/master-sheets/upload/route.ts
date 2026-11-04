@@ -10,6 +10,16 @@ import {
   MASTER_SHEETS_DIR,
 } from "@/lib/master-sheets-config";
 import { getMasterSheetsHostStatus } from "@/lib/master-sheets-status";
+import { classifyUploadBatch } from "@/lib/upload/batch-classifier";
+import {
+  checkDuplicateUploadDate,
+  parseReplaceExisting,
+} from "@/lib/upload/duplicate-date-guard";
+import {
+  extractMasterBatchDataDate,
+  extractRawBatchDataDateFromFiles,
+} from "@/lib/upload/extract-batch-data-date";
+import { handleRawConversionUpload } from "@/lib/upload/raw-upload-stub";
 
 export const runtime = "nodejs";
 
@@ -78,12 +88,85 @@ async function handleUpload(form: FormData) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
   }
 
+  const files: File[] = entries.filter((e): e is File => e instanceof File);
+  const replaceExisting = parseReplaceExisting(form);
+  const classification = classifyUploadBatch(files.map((f) => f.name));
+
+  if (classification.kind === "invalid") {
+    const { error, missing, uploaded, requiredCount, extraMasters } =
+      classification;
+    return NextResponse.json(
+      {
+        error,
+        ...(missing ? { missing } : {}),
+        ...(uploaded ? { uploaded } : {}),
+        ...(requiredCount !== undefined ? { requiredCount } : {}),
+        ...(extraMasters ? { extraMasters } : {}),
+      },
+      { status: 400 },
+    );
+  }
+
+  if (classification.kind === "raw_conversion") {
+    const incomingDate = await extractRawBatchDataDateFromFiles(files);
+    const duplicate = await checkDuplicateUploadDate({
+      incomingDate,
+      replaceExisting,
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: "Duplicate data date",
+          duplicateDate: duplicate.duplicateDate,
+          message: duplicate.message,
+        },
+        { status: 409 },
+      );
+    }
+
+    const outcome = await handleRawConversionUpload(files, {
+      replaceExisting,
+    });
+    if (!outcome.ok) {
+      return NextResponse.json(outcome.body, { status: outcome.status });
+    }
+    const host = await getMasterSheetsHostStatus();
+    return NextResponse.json({
+      ok: true,
+      mode: "raw",
+      saved: outcome.saved,
+      warnings: outcome.warnings,
+      logicalIds: outcome.logicalIds,
+      downloadableAfterWarnings: outcome.downloadableAfterWarnings,
+      latestDate: host.latestReportDate,
+      earliestDate: host.earliestDataDate,
+      message: outcome.message,
+    });
+  }
+
+  const incomingDate = await extractMasterBatchDataDate(files);
+  const duplicate = await checkDuplicateUploadDate({
+    incomingDate,
+    replaceExisting,
+  });
+  if (duplicate) {
+    return NextResponse.json(
+      {
+        error: "Duplicate data date",
+        duplicateDate: duplicate.duplicateDate,
+        message: duplicate.message,
+      },
+      { status: 409 },
+    );
+  }
+
   await mkdir(MASTER_SHEETS_DIR, { recursive: true });
 
   const saved: string[] = [];
   const skipped: Array<{ name: string; reason: string }> = [];
+  const writtenMasters = new Set<string>();
 
-  for (const entry of entries) {
+  for (const entry of files) {
     if (!(entry instanceof File)) continue;
 
     const safeName = sanitizeFilename(entry.name);
@@ -107,6 +190,7 @@ async function handleUpload(form: FormData) {
 
     const buffer = Buffer.from(await entry.arrayBuffer());
     await writeFile(path.join(MASTER_SHEETS_DIR, canonicalName), buffer);
+    writtenMasters.add(canonicalName);
     saved.push(
       canonicalName === safeName
         ? canonicalName
@@ -114,9 +198,16 @@ async function handleUpload(form: FormData) {
     );
   }
 
-  if (saved.length === 0) {
+  const missingMasters = EXPECTED_MASTER_SHEET_FILES.filter(
+    (m) => !writtenMasters.has(m),
+  );
+  if (missingMasters.length > 0 || skipped.length > 0) {
     return NextResponse.json(
-      { error: "No files were saved", skipped },
+      {
+        error: "Incomplete master batch (all four canonical workbooks required)",
+        missing: missingMasters,
+        skipped,
+      },
       { status: 400 },
     );
   }
@@ -128,8 +219,10 @@ async function handleUpload(form: FormData) {
 
   return NextResponse.json({
     ok: true,
+    mode: "master",
     saved,
-    skipped,
+    warnings: [],
+    downloadableAfterWarnings: [],
     latestDate: host.latestReportDate,
     earliestDate: host.earliestDataDate,
     masterSheetsDirectory: host.masterSheetsDirectory,

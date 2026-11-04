@@ -3,8 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, Upload } from "lucide-react";
+import { DuplicateDateDialog } from "@/components/dashboard/duplicate-date-dialog";
+import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dialog";
 import type { MasterSheetUploadMeta } from "@/lib/master-sheet-upload-meta";
-import { useCallback, useEffect, useId, useState } from "react";
+import type { RawCsvWarning } from "@/lib/raw-csv-validation";
+import type { DownloadableAfterWarning } from "@/lib/upload/downloadable-after-warnings";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 interface ExpectedFileStatus {
   name: string;
@@ -34,6 +38,20 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hostStatus, setHostStatus] = useState<HostDataStatus | null>(null);
+  const [postUploadWarnings, setPostUploadWarnings] = useState<RawCsvWarning[]>(
+    [],
+  );
+  const [warningsDialogOpen, setWarningsDialogOpen] = useState(false);
+  const [downloadableAfterWarnings, setDownloadableAfterWarnings] = useState<
+    DownloadableAfterWarning[]
+  >([]);
+  const pendingUploadRef = useRef<File[] | null>(null);
+  const [duplicateDateOpen, setDuplicateDateOpen] = useState(false);
+  const [duplicateDate, setDuplicateDate] = useState<string | null>(null);
+  const [duplicateDateMessage, setDuplicateDateMessage] = useState<string | null>(
+    null,
+  );
+  const [replacingDuplicate, setReplacingDuplicate] = useState(false);
 
   const loadStatus = useCallback(() => {
     fetch("/api/master-sheets/upload")
@@ -55,11 +73,19 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     loadStatus();
   }, [loadStatus]);
 
-  const uploadFiles = async (fileList: FileList | File[]) => {
+  const uploadFiles = async (
+    fileList: FileList | File[],
+    options?: { replaceExisting?: boolean },
+  ) => {
     const files = Array.from(fileList);
     if (files.length === 0) return;
 
-    setUploading(true);
+    const replaceExisting = options?.replaceExisting ?? false;
+    if (replaceExisting) {
+      setReplacingDuplicate(true);
+    } else {
+      setUploading(true);
+    }
     setError(null);
     setMessage(null);
 
@@ -69,6 +95,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     }
     if (uploadToken.trim()) {
       form.append("uploadToken", uploadToken.trim());
+    }
+    if (replaceExisting) {
+      form.append("replaceExisting", "true");
     }
 
     try {
@@ -84,9 +113,22 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       });
       const json = await res.json();
 
+      if (res.status === 409 && json.duplicateDate) {
+        pendingUploadRef.current = files;
+        setDuplicateDate(json.duplicateDate as string);
+        setDuplicateDateMessage((json.message as string | undefined) ?? null);
+        setDuplicateDateOpen(true);
+        return;
+      }
+
       if (!res.ok) {
+        setDuplicateDateOpen(false);
         setError(json.error ?? "Upload failed");
-        if (json.skipped?.length) {
+        if (json.missing?.length) {
+          setError(
+            `${json.error ?? "Upload failed"} — missing: ${(json.missing as string[]).join(", ")}`,
+          );
+        } else if (json.skipped?.length) {
           setError(
             `${json.error ?? "Upload failed"} (${json.skipped.map((s: { name: string; reason: string }) => s.reason).join(", ")})`,
           );
@@ -94,29 +136,73 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         return;
       }
 
+      pendingUploadRef.current = null;
+      setDuplicateDateOpen(false);
+      setDuplicateDate(null);
+      setDuplicateDateMessage(null);
+
       const saved = (json.saved as string[]).join(", ");
       setMessage(
         (json.message as string | undefined) ??
           `Saved: ${saved}. Refreshing dashboard…`,
       );
+
+      const warnings = (json.warnings as RawCsvWarning[] | undefined) ?? [];
+      const downloads =
+        (json.downloadableAfterWarnings as
+          | DownloadableAfterWarning[]
+          | undefined) ?? [];
+      if (warnings.length > 0) {
+        setPostUploadWarnings(warnings);
+        setDownloadableAfterWarnings(downloads);
+        setWarningsDialogOpen(true);
+      } else {
+        setPostUploadWarnings([]);
+        setDownloadableAfterWarnings([]);
+        setWarningsDialogOpen(false);
+      }
+
       loadStatus();
-      setHostStatus({
-        latestReportDate: (json.latestDate as string | null | undefined) ?? null,
-        masterSheetsDirectory:
-          (json.masterSheetsDirectory as string | undefined) ?? null,
-        workingDirectory: (json.workingDirectory as string | undefined) ?? null,
-        extraSpreadsheetFiles:
-          (json.extraSpreadsheetFiles as string[] | undefined) ?? [],
-      });
-      onUploadSuccess?.({
-        latestDate: (json.latestDate as string | null | undefined) ?? null,
-        earliestDate: (json.earliestDate as string | null | undefined) ?? null,
-      });
+      if (json.mode === "master" || json.mode === "raw") {
+        if (json.mode === "master") {
+          setHostStatus({
+            latestReportDate:
+              (json.latestDate as string | null | undefined) ?? null,
+            masterSheetsDirectory:
+              (json.masterSheetsDirectory as string | undefined) ?? null,
+            workingDirectory:
+              (json.workingDirectory as string | undefined) ?? null,
+            extraSpreadsheetFiles:
+              (json.extraSpreadsheetFiles as string[] | undefined) ?? [],
+          });
+        }
+        onUploadSuccess?.({
+          latestDate: (json.latestDate as string | null | undefined) ?? null,
+          earliestDate: (json.earliestDate as string | null | undefined) ?? null,
+        });
+      }
     } catch {
       setError("Upload failed — check network and try again");
     } finally {
       setUploading(false);
+      setReplacingDuplicate(false);
     }
+  };
+
+  const handleDuplicateReplace = () => {
+    const pending = pendingUploadRef.current;
+    if (!pending?.length) {
+      setDuplicateDateOpen(false);
+      return;
+    }
+    void uploadFiles(pending, { replaceExisting: true });
+  };
+
+  const handleDuplicateCancel = () => {
+    pendingUploadRef.current = null;
+    setDuplicateDateOpen(false);
+    setDuplicateDate(null);
+    setDuplicateDateMessage(null);
   };
 
   return (
@@ -175,12 +261,12 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       >
         <Upload className="h-6 w-6 text-brand-muted" />
         <span className="text-xs font-medium text-slate-700">
-          Drop .xlsx files or click to browse
+          Drop all four masters, or 26 raw CSVs + feed-in report
         </span>
         <input
           id={inputId}
           type="file"
-          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
           multiple
           className="sr-only"
           disabled={uploading}
@@ -277,6 +363,23 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       >
         Refresh file list
       </Button>
+
+      <DuplicateDateDialog
+        duplicateDate={duplicateDate}
+        message={duplicateDateMessage}
+        open={duplicateDateOpen}
+        replacing={replacingDuplicate}
+        onReplace={handleDuplicateReplace}
+        onCancel={handleDuplicateCancel}
+      />
+
+      <UploadWarningsDialog
+        warnings={postUploadWarnings}
+        downloadableAfterWarnings={downloadableAfterWarnings}
+        uploadToken={uploadToken}
+        open={warningsDialogOpen}
+        onDismiss={() => setWarningsDialogOpen(false)}
+      />
     </div>
   );
 }
