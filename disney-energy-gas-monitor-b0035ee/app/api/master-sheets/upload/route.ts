@@ -17,8 +17,9 @@ import {
 } from "@/lib/upload/duplicate-date-guard";
 import {
   extractMasterBatchDataDate,
-  extractRawBatchDataDateFromFiles,
+  extractRawReportDateFromFiles,
 } from "@/lib/upload/extract-batch-data-date";
+import { saveMasterSnapshotForDate } from "@/lib/upload/date-snapshot-store";
 import { handleRawConversionUpload } from "@/lib/upload/raw-upload-stub";
 
 export const runtime = "nodejs";
@@ -108,7 +109,7 @@ async function handleUpload(form: FormData) {
   }
 
   if (classification.kind === "raw_conversion") {
-    const incomingDate = await extractRawBatchDataDateFromFiles(files);
+    const incomingDate = await extractRawReportDateFromFiles(files);
     const duplicate = await checkDuplicateUploadDate({
       incomingDate,
       replaceExisting,
@@ -138,6 +139,7 @@ async function handleUpload(form: FormData) {
       warnings: outcome.warnings,
       logicalIds: outcome.logicalIds,
       downloadableAfterWarnings: outcome.downloadableAfterWarnings,
+      gasManualEntry: outcome.gasManualEntry ?? null,
       latestDate: host.latestReportDate,
       earliestDate: host.earliestDataDate,
       message: outcome.message,
@@ -214,6 +216,10 @@ async function handleUpload(form: FormData) {
 
   clearDataStoreCache();
   revalidatePath("/");
+
+  if (incomingDate) {
+    await saveMasterSnapshotForDate(incomingDate);
+  }
 
   const host = await getMasterSheetsHostStatus();
 

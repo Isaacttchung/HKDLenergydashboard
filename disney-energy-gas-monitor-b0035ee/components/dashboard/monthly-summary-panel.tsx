@@ -8,10 +8,16 @@ import type { MapZoneEnergyResult } from "@/lib/resort-map/aggregate-energy";
 import { PeriodContextCards } from "@/components/dashboard/period-context-cards";
 import { PeriodNavigator } from "@/components/dashboard/period-navigator";
 import { PeriodExtremaCards } from "@/components/dashboard/period-extrema-cards";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  SummaryDownloadBar,
+  SummaryPanelTitle,
+  SummaryPanelTitleInset,
+} from "@/components/dashboard/summary-panel-header";
+import { Card, CardContent } from "@/components/ui/card";
 import type { MonthlyReportSummary } from "@/lib/types";
 
 interface MonthlySummaryPanelProps {
+  documentDownloadDate: string;
   summary: MonthlyReportSummary;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
@@ -22,6 +28,7 @@ interface MonthlySummaryPanelProps {
 }
 
 export function MonthlySummaryPanel({
+  documentDownloadDate,
   summary,
   onPreviousMonth,
   onNextMonth,
@@ -36,24 +43,28 @@ export function MonthlySummaryPanel({
   );
 
   return (
-    <Card className="border-brand-border bg-white">
-      <CardHeader className="border-b border-brand-border/60 bg-brand-light/60">
-        <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg text-brand-foreground">
-          <span>Monthly Report Summary —</span>
-          <PeriodNavigator
-            label={summary.periodLabel}
-            onPrevious={onPreviousMonth}
-            onNext={onNextMonth}
-            canGoPrevious={canGoPreviousMonth}
-            canGoNext={canGoNextMonth}
+    <div className="space-y-3">
+      <SummaryDownloadBar
+        documentDownloadDate={documentDownloadDate}
+        downloadsEnabled={false}
+      />
+      <Card className="border-brand-border bg-white">
+        <SummaryPanelTitleInset>
+          <SummaryPanelTitle
+            title="Monthly Report Summary —"
+            navigator={
+              <PeriodNavigator
+                label={summary.periodLabel}
+                onPrevious={onPreviousMonth}
+                onNext={onNextMonth}
+                canGoPrevious={canGoPreviousMonth}
+                canGoNext={canGoNextMonth}
+              />
+            }
+            subtitle={`Month total across ${summary.daysInMonth} day${summary.daysInMonth === 1 ? "" : "s"}`}
           />
-        </CardTitle>
-        <p className="text-sm text-slate-600">
-          Month total across {summary.daysInMonth} day
-          {summary.daysInMonth === 1 ? "" : "s"}
-        </p>
-      </CardHeader>
-      <CardContent className="min-w-0 space-y-6 pt-5">
+        </SummaryPanelTitleInset>
+        <CardContent className="min-w-0 space-y-6 pt-4">
         <PeriodContextCards
           periodContext={summary.context}
           gasKwh={summary.totals.gasKwh}
@@ -85,7 +96,8 @@ export function MonthlySummaryPanel({
           utilization, occupancy, sunshine, and rainfall are daily averages
           across the month. Gas consumption is the month total.
         </p>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

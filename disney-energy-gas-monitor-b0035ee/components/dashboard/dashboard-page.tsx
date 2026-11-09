@@ -555,7 +555,7 @@ export function DashboardPage({
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:flex-row md:items-start lg:px-8">
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:max-w-[1340px] md:flex-row md:items-start lg:max-w-[1360px] lg:px-8 xl:max-w-[1400px]">
         <div className="order-2 min-w-0 flex-1 space-y-6 md:order-1">
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
@@ -613,6 +613,7 @@ export function DashboardPage({
 
               {timePreset === "month" && data.primary.monthlyReportSummary && (
                 <MonthlySummaryPanel
+                  documentDownloadDate={singleDay}
                   summary={data.primary.monthlyReportSummary}
                   onPreviousMonth={goToPreviousMonth}
                   onNextMonth={goToNextMonth}
@@ -637,6 +638,7 @@ export function DashboardPage({
 
               {timePreset === "ytd" && data.primary.yearlyReportSummary && (
                 <YearlySummaryPanel
+                  documentDownloadDate={singleDay}
                   summary={data.primary.yearlyReportSummary}
                   onPreviousYear={goToPreviousYear}
                   onNextYear={goToNextYear}
@@ -669,6 +671,7 @@ export function DashboardPage({
                 customRangeReady &&
                 data.primary.customRangeReportSummary && (
                   <CustomRangeSummaryPanel
+                    documentDownloadDate={singleDay}
                     summary={data.primary.customRangeReportSummary}
                     mapZoneSummaries={
                       selectedMapZones.length > 0 ? mapZoneSummaries : null
@@ -695,7 +698,7 @@ export function DashboardPage({
           )}
         </div>
 
-        <div className="order-1 w-full shrink-0 md:order-2 md:w-[280px] lg:w-[320px]">
+        <div className="order-1 w-full shrink-0 md:order-2 md:w-[340px] lg:w-[400px] xl:w-[440px]">
         <FilterSidebar
           groups={groups}
           buildings={buildings}

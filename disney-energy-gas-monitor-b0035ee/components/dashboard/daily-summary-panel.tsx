@@ -1,11 +1,15 @@
 "use client";
 
-import { DownloadDailyReportButton } from "@/components/dashboard/download-daily-report-button";
 import { SummaryBreakdownSection } from "@/components/dashboard/summary-breakdown-section";
+import {
+  SummaryDownloadBar,
+  SummaryPanelTitle,
+  SummaryPanelTitleInset,
+} from "@/components/dashboard/summary-panel-header";
 import type { MapZoneEnergyResult } from "@/lib/resort-map/aggregate-energy";
 import { PeriodContextCards } from "@/components/dashboard/period-context-cards";
 import { PeriodNavigator } from "@/components/dashboard/period-navigator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import type { DailyContext } from "@/lib/daily-context";
 import type { DailyBreakdown } from "@/lib/types";
 
@@ -42,12 +46,13 @@ export function DailySummaryPanel({
   mapZoneSummariesLoading = false,
 }: DailySummaryPanelProps) {
   return (
-    <Card className="border-brand-border bg-white">
-      <CardHeader className="border-b border-brand-border/60 bg-brand-light/60">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 flex-1 space-y-1">
-            <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg text-brand-foreground">
-              <span>Daily Report Summary —</span>
+    <div className="space-y-3">
+      <SummaryDownloadBar documentDownloadDate={date} downloadsEnabled />
+      <Card className="border-brand-border bg-white">
+        <SummaryPanelTitleInset>
+          <SummaryPanelTitle
+            title="Daily Report Summary —"
+            navigator={
               <PeriodNavigator
                 label={formatDateLabel(date)}
                 onPrevious={onPreviousDay}
@@ -55,19 +60,14 @@ export function DailySummaryPanel({
                 canGoPrevious={canGoPreviousDay}
                 canGoNext={canGoNextDay}
               />
-            </CardTitle>
-            <p className="text-sm text-slate-600">
-              {context?.reportTitle ??
-                "Daily Power, Gas Consumption & Solar Energy Feed-in Tariff of HCCP, CCP, Hotel and Theme Park"}
-            </p>
-          </div>
-          <DownloadDailyReportButton
-            date={date}
-            className="shrink-0 border-brand-border bg-white"
+            }
+            subtitle={
+              context?.reportTitle ??
+              "Daily Power, Gas Consumption & Solar Energy Feed-in Tariff of HCCP, CCP, Hotel and Theme Park"
+            }
           />
-        </div>
-      </CardHeader>
-      <CardContent className="min-w-0 space-y-6 pt-5">
+        </SummaryPanelTitleInset>
+        <CardContent className="min-w-0 space-y-6 pt-4">
         <PeriodContextCards
           dailyContext={context}
           gasKwh={breakdown.gasKwh}
@@ -101,7 +101,8 @@ export function DailySummaryPanel({
             ))}
           </ul>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

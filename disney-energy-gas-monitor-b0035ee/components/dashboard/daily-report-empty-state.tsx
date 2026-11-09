@@ -1,8 +1,12 @@
 "use client";
 
-import { DownloadDailyReportButton } from "@/components/dashboard/download-daily-report-button";
 import { PeriodNavigator } from "@/components/dashboard/period-navigator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  SummaryDownloadBar,
+  SummaryPanelTitle,
+  SummaryPanelTitleInset,
+} from "@/components/dashboard/summary-panel-header";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface DailyReportEmptyStateProps {
   date: string;
@@ -33,26 +37,24 @@ export function DailyReportEmptyState({
   const isBeyondLatest = date > latestAvailableDate;
 
   return (
-    <Card className="border-brand-border bg-white">
-      <CardHeader className="border-b border-brand-border/60 bg-brand-light/60">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <CardTitle className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-lg text-brand-foreground">
-            <span>Daily Report Summary —</span>
-            <PeriodNavigator
-              label={formatDateLabel(date)}
-              onPrevious={onPreviousDay}
-              onNext={onNextDay}
-              canGoPrevious={canGoPreviousDay}
-              canGoNext={canGoNextDay}
-            />
-          </CardTitle>
-          <DownloadDailyReportButton
-            date={date}
-            className="shrink-0 border-brand-border bg-white"
+    <div className="space-y-3">
+      <SummaryDownloadBar documentDownloadDate={date} downloadsEnabled />
+      <Card className="border-brand-border bg-white">
+        <SummaryPanelTitleInset>
+          <SummaryPanelTitle
+            title="Daily Report Summary —"
+            navigator={
+              <PeriodNavigator
+                label={formatDateLabel(date)}
+                onPrevious={onPreviousDay}
+                onNext={onNextDay}
+                canGoPrevious={canGoPreviousDay}
+                canGoNext={canGoNextDay}
+              />
+            }
           />
-        </div>
-      </CardHeader>
-      <CardContent className="py-10 text-center text-sm text-slate-600">
+        </SummaryPanelTitleInset>
+        <CardContent className="py-10 text-center text-sm text-slate-600">
         {isBeyondLatest ? (
           <p>
             No daily EMS report is available for this date yet. The latest
@@ -71,7 +73,8 @@ export function DailyReportEmptyState({
             . Choose another day or upload updated master sheets.
           </p>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

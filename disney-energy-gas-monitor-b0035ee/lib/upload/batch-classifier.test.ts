@@ -26,12 +26,24 @@ describe("classifyUploadBatch", () => {
     }
   });
 
-  it("accepts 26 raws + feed-in", () => {
+  it("accepts 26 raws + HCCP Gas Capacity + feed-in", () => {
+    const result = classifyUploadBatch([
+      ...RAW_SAMPLE_NAMES,
+      "HCCP Gas Capacity.csv",
+      RAW_CONVERSION_FEED_IN_MASTER,
+    ]);
+    assert.equal(result.kind, "raw_conversion");
+  });
+
+  it("rejects 26 raws + feed-in without HCCP Gas Capacity", () => {
     const result = classifyUploadBatch([
       ...RAW_SAMPLE_NAMES,
       RAW_CONVERSION_FEED_IN_MASTER,
     ]);
-    assert.equal(result.kind, "raw_conversion");
+    assert.equal(result.kind, "invalid");
+    if (result.kind === "invalid") {
+      assert.match(result.error, /HCCP Gas Capacity/i);
+    }
   });
 
   it("rejects 26 raws without feed-in", () => {
@@ -46,7 +58,7 @@ describe("classifyUploadBatch", () => {
     const result = classifyUploadBatch([RAW_CONVERSION_FEED_IN_MASTER]);
     assert.equal(result.kind, "invalid");
     if (result.kind === "invalid") {
-      assert.match(result.error, /26 raw/i);
+      assert.match(result.error, /HCCP Gas Capacity|26 EMS/i);
     }
   });
 
@@ -68,7 +80,7 @@ describe("classifyUploadBatch", () => {
     ]);
     assert.equal(result.kind, "invalid");
     if (result.kind === "invalid") {
-      assert.ok(result.missing?.length);
+      assert.match(result.error, /Incomplete raw|HCCP Gas Capacity/i);
     }
   });
 });

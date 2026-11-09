@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { clearDataStoreCache } from "@/lib/datastore/master-sheet-store";
 import {
   EXPECTED_RAW_LOGICAL_IDS,
+  isHccpGasCapacityCsvFilename,
   RAW_DATA_DIR,
   resolveRawLogicalId,
 } from "@/lib/raw-data-config";
@@ -13,6 +14,23 @@ import {
   type RawCsvWarning,
 } from "@/lib/raw-csv-validation";
 import { RAW_CONVERSION_FEED_IN_MASTER } from "@/lib/upload/batch-classifier";
+import {
+  convertHccpGasMaster,
+  HCCP_GAS_MASTER_FILENAME,
+  HccpGasConversionError,
+} from "@/lib/raw-to-master/hccp-gas";
+import { dailyReportDateFromEmsBatchDataDate } from "@/lib/hkdl-daily-report-date";
+import { HCCP_GAS_CAPACITY_LOGICAL_ID } from "@/lib/raw-data-config";
+import {
+  saveMasterSnapshotForDate,
+  saveRawSnapshotForDate,
+} from "@/lib/upload/date-snapshot-store";
+import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
+import {
+  loadHccpGasCapacityCsvTextsForConsumption,
+  pruneHccpGasCapacityArchive,
+  saveHccpGasCapacityUpload,
+} from "@/lib/upload/hccp-gas-capacity-store";
 import {
   convertPowerSolarMaster,
   POWER_SOLAR_MASTER_FILENAME,
@@ -46,6 +64,11 @@ function sanitizeMasterFilename(raw: string): string | null {
   return base;
 }
 
+export interface GasManualEntryPrompt {
+  consumptionDate: string;
+  required: true;
+}
+
 export interface RawUploadStubResult {
   ok: true;
   saved: string[];
@@ -53,6 +76,7 @@ export interface RawUploadStubResult {
   logicalIds: string[];
   downloadableAfterWarnings: DownloadableAfterWarning[];
   message: string;
+  gasManualEntry?: GasManualEntryPrompt;
 }
 
 export interface RawUploadStubError {
@@ -64,7 +88,7 @@ export interface RawUploadStubError {
 export type RawUploadStubOutcome = RawUploadStubResult | RawUploadStubError;
 
 /**
- * Mode A: stage 26 CSVs + feed-in, validate, Top_10 + Power_Solar conversion, refresh cache.
+ * Raw conversion: 26 EMS CSVs + HCCP Gas Capacity + feed-in → Top_10, Power_Solar, gas master.
  */
 export async function handleRawConversionUpload(
   files: File[],
@@ -77,10 +101,28 @@ export async function handleRawConversionUpload(
     { filename: string; content: string }
   >();
   let feedInFile: { safeName: string; buffer: Buffer } | null = null;
+  let hccpGasCapacity: { filename: string; content: string } | null = null;
 
   for (const entry of files) {
     const csvName = sanitizeCsvFilename(entry.name);
     if (csvName) {
+      if (isHccpGasCapacityCsvFilename(csvName)) {
+        if (hccpGasCapacity) {
+          skipped.push({
+            name: csvName,
+            reason: "Only one HCCP Gas Capacity.csv allowed per upload",
+          });
+          continue;
+        }
+        if (entry.size > MAX_BYTES) {
+          skipped.push({ name: csvName, reason: "File too large (max 40 MB)" });
+          continue;
+        }
+        const content = Buffer.from(await entry.arrayBuffer()).toString("utf-8");
+        hccpGasCapacity = { filename: csvName, content };
+        saved.push(csvName);
+        continue;
+      }
       const logicalId = resolveRawLogicalId(csvName);
       if (!logicalId) {
         skipped.push({
@@ -165,6 +207,14 @@ export async function handleRawConversionUpload(
     };
   }
 
+  if (!hccpGasCapacity) {
+    return {
+      ok: false,
+      status: 400,
+      body: { error: "Missing HCCP Gas Capacity.csv (required with 26 EMS CSVs)" },
+    };
+  }
+
   await mkdir(RAW_DATA_DIR, { recursive: true });
   await mkdir(MASTER_SHEETS_DIR, { recursive: true });
 
@@ -197,14 +247,17 @@ export async function handleRawConversionUpload(
       },
     };
   }
-  const dataDate = dateCheck.dataDate;
+  const emsBatchDataDate = dateCheck.dataDate;
+  const reportDate = dailyReportDateFromEmsBatchDataDate(emsBatchDataDate);
 
+  const gasMasterPath = path.join(MASTER_SHEETS_DIR, HCCP_GAS_MASTER_FILENAME);
   const powerSolarPath = path.join(MASTER_SHEETS_DIR, POWER_SOLAR_MASTER_FILENAME);
   const top10Path = path.join(MASTER_SHEETS_DIR, TOP10_MASTER_FILENAME);
   const feedInPath = path.join(MASTER_SHEETS_DIR, RAW_CONVERSION_FEED_IN_MASTER);
   for (const [label, p] of [
     [POWER_SOLAR_MASTER_FILENAME, powerSolarPath],
     [TOP10_MASTER_FILENAME, top10Path],
+    [HCCP_GAS_MASTER_FILENAME, gasMasterPath],
   ] as const) {
     try {
       await access(p);
@@ -221,7 +274,7 @@ export async function handleRawConversionUpload(
 
   try {
     await convertTop10Master({
-      dataDate,
+      dataDate: reportDate,
       rawCsvByLogicalId,
       masterWorkbookPath: top10Path,
       feedInTariffPath: feedInPath,
@@ -250,7 +303,7 @@ export async function handleRawConversionUpload(
 
   try {
     await convertPowerSolarMaster({
-      dataDate,
+      dataDate: reportDate,
       rawCsvByLogicalId,
       masterWorkbookPath: powerSolarPath,
       feedInTariffPath: feedInPath,
@@ -265,6 +318,47 @@ export async function handleRawConversionUpload(
     };
   }
 
+  let gasConversionSummary = "";
+  let gasConsumptionDate = "";
+  try {
+    const archiveMeta = await saveHccpGasCapacityUpload(hccpGasCapacity.content);
+    const pruned = await pruneHccpGasCapacityArchive(emsBatchDataDate);
+    gasConsumptionDate = reportDate;
+    const capacityTexts = await loadHccpGasCapacityCsvTextsForConsumption(
+      gasConsumptionDate,
+      hccpGasCapacity.content,
+    );
+    const outdoorAirTempC = outdoorAirTempFromDaily1Csv(rawCsvByLogicalId);
+    if (outdoorAirTempC === null) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          error:
+            "Could not compute outdoor air temperature from CCP+HCCP Daily1 (column BY)",
+        },
+      };
+    }
+    const gasResult = await convertHccpGasMaster({
+      capacityCsvTexts: capacityTexts,
+      masterWorkbookPath: gasMasterPath,
+      consumptionDate: gasConsumptionDate,
+      outdoorAirTempC,
+    });
+    gasConversionSummary = ` Gas master ${gasConsumptionDate}: M1 ${gasResult.meter1}, M2 ${gasResult.meter2}, total ${gasResult.gasConsumptionUnits} units (archived ${archiveMeta.filename}${pruned.length > 0 ? `; pruned ${pruned.join(", ")}` : ""}).`;
+  } catch (error) {
+    if (error instanceof HccpGasConversionError) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: error.message, code: error.code },
+      };
+    }
+    const message =
+      error instanceof Error ? error.message : "HCCP gas conversion failed";
+    return { ok: false, status: 400, body: { error: message } };
+  }
+
   const warnings = validateRawCsvBatch(
     csvContents.map(({ logicalId, content }) => ({
       filename: logicalId,
@@ -274,6 +368,22 @@ export async function handleRawConversionUpload(
 
   clearDataStoreCache();
   revalidatePath("/");
+
+  await saveRawSnapshotForDate(reportDate, [
+    ...[...byLogicalId.entries()].map(([logicalId, { content }]) => ({
+      logicalId,
+      content,
+    })),
+    {
+      logicalId: HCCP_GAS_CAPACITY_LOGICAL_ID,
+      content: hccpGasCapacity.content,
+    },
+    {
+      logicalId: RAW_CONVERSION_FEED_IN_MASTER,
+      content: feedInFile.buffer,
+    },
+  ]);
+  await saveMasterSnapshotForDate(reportDate);
 
   const downloadableAfterWarnings =
     warnings.length > 0
@@ -286,10 +396,14 @@ export async function handleRawConversionUpload(
     warnings,
     logicalIds: uploadedIds,
     downloadableAfterWarnings,
+    gasManualEntry: {
+      consumptionDate: gasConsumptionDate,
+      required: true,
+    },
     message:
       warnings.length > 0
-        ? `Processed 27-file batch for ${dataDate} (${warnings.length} validation warning(s)). Top_10 and Power_Solar masters updated.`
-        : `Processed 27-file batch for ${dataDate} with no validation warnings. Top_10 and Power_Solar masters updated.`,
+        ? `Processed raw batch for ${reportDate} (${warnings.length} validation warning(s)). Top_10, Power_Solar, and gas meters updated.${gasConversionSummary} Enter gas occupancy in the dialog.`
+        : `Processed raw batch for ${reportDate} with no validation warnings. Top_10, Power_Solar, and gas meters updated.${gasConversionSummary} Enter gas occupancy in the dialog.`,
   };
 }
 

@@ -1,18 +1,25 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { SINGLE_DAY_DOWNLOADS_MESSAGE } from "@/lib/download-single-day-guard";
 import { Download } from "lucide-react";
 
 interface DownloadDailyReportButtonProps {
   date: string;
+  downloadsEnabled?: boolean;
   className?: string;
 }
 
 export function DownloadDailyReportButton({
   date,
+  downloadsEnabled = true,
   className,
 }: DownloadDailyReportButtonProps) {
   async function handleDownload() {
+    if (!downloadsEnabled) {
+      window.alert(SINGLE_DAY_DOWNLOADS_MESSAGE);
+      return;
+    }
     const url = `/api/daily-report/pdf?date=${encodeURIComponent(date)}`;
     const response = await fetch(url);
     if (!response.ok) {

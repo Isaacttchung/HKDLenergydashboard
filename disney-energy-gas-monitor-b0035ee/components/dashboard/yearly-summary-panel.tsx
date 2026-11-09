@@ -8,10 +8,16 @@ import type { MapZoneEnergyResult } from "@/lib/resort-map/aggregate-energy";
 import { PeriodContextCards } from "@/components/dashboard/period-context-cards";
 import { PeriodNavigator } from "@/components/dashboard/period-navigator";
 import { PeriodExtremaCards } from "@/components/dashboard/period-extrema-cards";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  SummaryDownloadBar,
+  SummaryPanelTitle,
+  SummaryPanelTitleInset,
+} from "@/components/dashboard/summary-panel-header";
+import { Card, CardContent } from "@/components/ui/card";
 import type { YearlyReportSummary } from "@/lib/types";
 
 interface YearlySummaryPanelProps {
+  documentDownloadDate: string;
   summary: YearlyReportSummary;
   onPreviousYear: () => void;
   onNextYear: () => void;
@@ -22,6 +28,7 @@ interface YearlySummaryPanelProps {
 }
 
 export function YearlySummaryPanel({
+  documentDownloadDate,
   summary,
   onPreviousYear,
   onNextYear,
@@ -36,24 +43,28 @@ export function YearlySummaryPanel({
   );
 
   return (
-    <Card className="border-brand-border bg-white">
-      <CardHeader className="border-b border-brand-border/60 bg-brand-light/60">
-        <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg text-brand-foreground">
-          <span>Yearly Report Summary —</span>
-          <PeriodNavigator
-            label={summary.periodLabel}
-            onPrevious={onPreviousYear}
-            onNext={onNextYear}
-            canGoPrevious={canGoPreviousYear}
-            canGoNext={canGoNextYear}
+    <div className="space-y-3">
+      <SummaryDownloadBar
+        documentDownloadDate={documentDownloadDate}
+        downloadsEnabled={false}
+      />
+      <Card className="border-brand-border bg-white">
+        <SummaryPanelTitleInset>
+          <SummaryPanelTitle
+            title="Yearly Report Summary —"
+            navigator={
+              <PeriodNavigator
+                label={summary.periodLabel}
+                onPrevious={onPreviousYear}
+                onNext={onNextYear}
+                canGoPrevious={canGoPreviousYear}
+                canGoNext={canGoNextYear}
+              />
+            }
+            subtitle={`Year total across ${summary.daysInYear} day${summary.daysInYear === 1 ? "" : "s"}`}
           />
-        </CardTitle>
-        <p className="text-sm text-slate-600">
-          Year total across {summary.daysInYear} day
-          {summary.daysInYear === 1 ? "" : "s"}
-        </p>
-      </CardHeader>
-      <CardContent className="min-w-0 space-y-6 pt-5">
+        </SummaryPanelTitleInset>
+        <CardContent className="min-w-0 space-y-6 pt-4">
         <PeriodContextCards
           periodContext={summary.context}
           gasKwh={summary.totals.gasKwh}
@@ -85,7 +96,8 @@ export function YearlySummaryPanel({
           utilization, occupancy, sunshine, and rainfall are daily averages
           across the year. Gas consumption is the year total.
         </p>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

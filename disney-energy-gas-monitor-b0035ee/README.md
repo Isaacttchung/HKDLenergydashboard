@@ -38,9 +38,9 @@ Historical data loads from **2018** through the latest date in the workbooks. Ga
 2. Refresh the page to reload data (the app watches master sheet file timestamps so uploads from other PCs are picked up after refresh).
 3. Optional manual overrides for report titles or notes can still go in `data/daily-context.json`.
 
-### Master sheet dropbox (host PC / ngrok)
+### Excel/Raw Data Dropbox (host PC / ngrok)
 
-The sidebar **Master sheet dropbox** uploads files to `data/master-sheets/` on the machine running the app. Coworkers only need the browser link; files are not stored on their laptops.
+The sidebar **Excel/Raw Data Dropbox** uploads files to `data/master-sheets/` on the machine running the app. Coworkers only need the browser link; files are not stored on their laptops.
 
 - Only these names are accepted: the four workbooks listed in the table above.
 - After upload, the dashboard refreshes server data and clears the in-memory cache. A full browser refresh should show the same **Host latest EMS date** as the upload success message.
@@ -50,13 +50,13 @@ The sidebar **Master sheet dropbox** uploads files to `data/master-sheets/` on t
 This almost always means the browser is not talking to the same app folder you think, or the host disk was not updated.
 
 1. **Use one ngrok URL** for every teammate. Bookmarks to `localhost` on a laptop only update that laptop — not the host PC.
-2. On the **host PC**, open the dashboard locally (`http://localhost:4000` or your dev port) and check **Master sheet dropbox → Host latest EMS date** and the file modified times. They should match right after an upload from another computer.
+2. On the **host PC**, open the dashboard locally (`http://localhost:4000` or your dev port) and check **Excel/Raw Data Dropbox → Host latest EMS date** and the file modified times. They should match right after an upload from another computer.
 3. Confirm **Host folder** in the sidebar matches the project you started with `npm run dev` (only one copy of the project should be running).
 4. Stop extra `npm run dev` / ngrok tunnels. Point ngrok at the single port where the host app runs.
 5. If **Extra Excel files** appears in the sidebar, delete those duplicates on the host under `data/master-sheets/` — the app only reads the four standard underscore filenames.
 6. After uploading, ensure all **four** workbooks were saved (green dots). Partial uploads leave the latest EMS date on the oldest power workbook.
 
-**Upload password (required for ngrok):** the sidebar dropbox checks `MASTER_SHEET_UPLOAD_TOKEN` on the host PC.
+**Upload password (required for ngrok):** the sidebar Excel/Raw Data Dropbox checks `MASTER_SHEET_UPLOAD_TOKEN` on the host PC.
 
 For local testing, copy the example env file (default test password `12345`):
 
@@ -113,15 +113,15 @@ lib/                  Data store, aggregations, filters
 
 ## Raw data upload (Mode A)
 
-Master sheet dropbox behavior added Nov 2026 (operators and developers).
+Excel/Raw Data Dropbox behavior added Nov 2026 (operators and developers).
 
 ### Summary
 
-The dropbox accepts **exactly one** of two upload bundles per attempt:
+The Excel/Raw Data Dropbox accepts **exactly one** of two upload bundles per attempt:
 
 | Mode | What to upload | Result |
 |------|----------------|--------|
-| **A — Raw conversion** | **26** raw CSV files **+** **`HKDL Daily Feed-in Tariff Report.xlsx`** (27 files total) | Converts data into master workbooks on disk, clears cache, refreshes the dashboard |
+| **A — Raw conversion** | **26** EMS CSVs **+** **HCCP Gas Capacity.csv** **+** **`HKDL Daily Feed-in Tariff Report.xlsx`** (28 files total) | Converts data into master workbooks on disk, clears cache, refreshes the dashboard |
 | **B — Master replace** | All **four** canonical master Excel workbooks together | Replaces files under `data/master-sheets/` (same as before this feature) |
 
 Mixed or partial batches are **rejected** (for example 26 raws without feed-in, or raws mixed with only some masters).
@@ -133,13 +133,19 @@ Users do **not** upload the internal formula workbook (`Formula-DailyWeb4.xlsm`)
 | Master workbook | From raw data? | Notes |
 |-----------------|----------------|-------|
 | **HKDL_Top_10.xlsx** (`WebSS_Data`) | Yes | Mappings from RawData spec; outdoor air temperature from **`CCP+HCCP Daily1`** (column BY, daily average → row 301) |
-| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_CCP**, **Mercury_HCCP**, **Mercury_Hotel**, **Mercury_Park** |
+| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_*** kWh columns; **Park Y** = outdoor temp (Daily1 BY); **Hotel P** / **Park AB** = 30-day formulas; **Park AA** = OPEN/CLOSE from **Z**; **Hotel O** + **Park Z** from gas manual step (occupancy + Atten) |
 | **HKDL Daily Feed-in Tariff Report.xlsx** | Uploaded as input | Required for solar / feed-in calculations; not produced from raws alone |
-| **HCCP_Gas_Consumption_report.xlsx** | No (yet) | Still upload via **Mode B** or future work |
+| **HCCP_Gas_Consumption_report.xlsx** | Yes (gas mode) | **HCCP Gas Capacity.csv** → Gas Meter Reading columns I/J/K |
 
-After a successful Mode A run, **Top_10** and **Power_Solar** masters are updated on disk. Gas master is unchanged unless you upload masters in Mode B.
+After a successful Mode A run, **Top_10**, **Power_Solar**, and **HCCP_Gas** masters are updated on disk (gas master must already be present under `data/master-sheets/`, same as Top_10 / Power_Solar).
 
-### Required raw files (26)
+**HCCP gas conversion (in Mode A):** Midnight readings in **HCCP Gas Capacity.csv** columns **B** and **C** are differenced (with **65536** rollover) and written to **Gas Meter Reading** columns **I**, **J**, and **K** (= I + J) on the **report date** (e.g. EMS day **8 Nov** → gas row **8 Nov** = midnight 8 Nov − midnight 9 Nov in the capacity file).
+
+After a successful raw upload, a **dialog** prompts for **Ballroom**, **DLH / DEL / DHH occupancy**, and **Atten** (columns **C, D, E, F, L**). **Outdoor air temperature** (column **H**) is computed from **`CCP+HCCP Daily1`** column **BY** (daily average, same as Top_10). **Overall occupancy** (column **G**) and **30 Days** (column **B**) are written as Excel formulas; new dates past the end of the sheet **append a row** with the same layout as the previous row.
+
+**Month rollover without re-uploading last month’s file:** Each Capacity CSV is saved under `data/raw/hccp-gas-capacity/` by month. The **previous month’s file is kept through the 2nd** of the new month so Oct 31 → Nov 1 consumption can use the archived October file; from the **3rd** onward only the current month archive is kept (one Capacity CSV per daily upload is enough).
+
+### Required raw files (26 EMS + 1 gas)
 
 Logical ids (filename suffix `_YYYYMMDDHHMMSS` is ignored; spaces vs underscores are normalized):
 
@@ -172,13 +178,17 @@ Logical ids (filename suffix `_YYYYMMDDHHMMSS` is ignored; spaces vs underscores
 
 **Not required:** `CCP_COP_kWh`.
 
-**Plus one master for Mode A:** `HKDL Daily Feed-in Tariff Report.xlsx` (must include a row for the batch **data date**).
+**Plus for Mode A:**
+
+- **HCCP Gas Capacity.csv** (monthly export; upload today’s file each day with the EMS batch)
+- **`HKDL Daily Feed-in Tariff Report.xlsx`** (must include a row for the batch **data date**)
 
 ### Data date rules
 
-- Every raw CSV must share the same calendar **data date**, taken from the **`Timestamp`** column.
-- If dates differ across files, upload fails with an error asking for a consistent set.
-- Feed-in master must contain values for that same date where formulas require feed-in.
+- Every raw CSV must share the same calendar **data date**, taken from the **`Timestamp`** column on the first row (e.g. `2026-11-08 00:15:00` — the file’s readings run through that day, often until `2026-11-09 00:00:00`).
+- **Report date** = that **Timestamp day** on every master (Top_10, Power_Solar, gas, feed-in lookups, duplicate checks). Export filenames may say the morning you downloaded; only **`Timestamp`** sets the date.
+- If Timestamp dates differ across files, upload fails with an error asking for a consistent set.
+- Feed-in master must contain a row for **report date** where solar/CHHP formulas require feed-in.
 
 ### Duplicate date
 
@@ -235,6 +245,5 @@ Tests: `lib/**/*.test.ts`, golden tests under `lib/raw-to-master/*golden*`.
 
 ### Not in this release
 
-- Raw → **HCCP_Gas** conversion
 - Optional “download all four masters” on clean success with no warnings
 - Monthly / yearly PDF reports (dashboard remains **daily-only** by design)

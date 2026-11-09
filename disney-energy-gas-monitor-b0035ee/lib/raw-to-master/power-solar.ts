@@ -10,6 +10,12 @@ import {
   excelSerialMatchesIsoDate,
   isoDateToExcelSerial,
 } from "@/lib/raw-to-master/excel-date";
+import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
+import {
+  writeHotelContextFormulas,
+  writeParkContextFormulas,
+  PS_PARK_COL,
+} from "@/lib/raw-to-master/power-solar-context";
 import {
   HOTEL_PROPERTY_SUBTOTALS,
   MERCURY_RAW_LOGICAL_IDS,
@@ -246,6 +252,30 @@ export async function convertPowerSolarMaster(
     const totalCol = headerMap.get(normalizeHeader(totalHeader));
     if (totalCol !== undefined && wroteInArea) {
       setNumericCell(sheet, dataRow, totalCol, areaSum);
+    }
+
+    if (area === "Hotel" && wroteInArea) {
+      writeHotelContextFormulas(sheet, dataRow);
+    }
+
+    if (area === "Park" && wroteInArea) {
+      const outdoor = outdoorAirTempFromDaily1Csv(input.rawCsvByLogicalId);
+      if (outdoor !== null) {
+        setNumericCell(sheet, dataRow, PS_PARK_COL.temperature, outdoor);
+      }
+      const attenCell =
+        sheet[
+          XLSX.utils.encode_cell({
+            r: dataRow,
+            c: PS_PARK_COL.attendance,
+          })
+        ];
+      const atten = Number(attenCell?.v);
+      writeParkContextFormulas(
+        sheet,
+        dataRow,
+        Number.isFinite(atten) ? atten : 0,
+      );
     }
 
     if (wroteInArea) areasUpdated.add(area);

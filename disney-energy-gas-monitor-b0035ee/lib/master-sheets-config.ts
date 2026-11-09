@@ -1,20 +1,16 @@
 import path from "path";
+import {
+  EXPECTED_MASTER_SHEET_FILES,
+  type ExpectedMasterSheetFile,
+} from "@/lib/expected-master-sheet-files";
+
+export { EXPECTED_MASTER_SHEET_FILES, type ExpectedMasterSheetFile };
 
 export const MASTER_SHEETS_DIR = path.join(
   process.cwd(),
   "data",
   "master-sheets",
 );
-
-/** Filenames the dashboard is built to read (replace-in-place on upload). */
-export const EXPECTED_MASTER_SHEET_FILES = [
-  "HCCP_Gas_Consumption_report.xlsx",
-  "HKDL_Daily_Feed-in_Tariff_Report.xlsx",
-  "HKDL_Power_Solar_consumption_report.xlsx",
-  "HKDL_Top_10.xlsx",
-] as const;
-
-export type ExpectedMasterSheetFile = (typeof EXPECTED_MASTER_SHEET_FILES)[number];
 
 export function isExpectedMasterSheetFilename(
   filename: string,

@@ -16,10 +16,9 @@ import {
   WEBSS_SHEET_NAME,
 } from "@/lib/raw-to-master/top-10-webss";
 
-export const TOP10_MASTER_FILENAME = "HKDL_Top_10.xlsx";
+import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
 
-const OUTDOOR_TEMP_RAW_LOGICAL_ID = "CCP+HCCP_Daily1";
-const OUTDOOR_TEMP_COLUMN = "BY";
+export const TOP10_MASTER_FILENAME = "HKDL_Top_10.xlsx";
 
 export interface Top10ConversionInput {
   dataDate: string;
@@ -127,9 +126,7 @@ function computeRowKwh(
 function computeOutdoorTempC(
   rawCsvByLogicalId: Record<string, string>,
 ): number | null {
-  const csv = rawCsvByLogicalId[OUTDOOR_TEMP_RAW_LOGICAL_ID];
-  if (!csv) return null;
-  return csvColumnDailyAverage(csv, OUTDOOR_TEMP_COLUMN);
+  return outdoorAirTempFromDaily1Csv(rawCsvByLogicalId);
 }
 
 export async function convertTop10Master(

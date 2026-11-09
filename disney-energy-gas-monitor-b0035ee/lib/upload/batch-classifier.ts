@@ -1,5 +1,6 @@
 import {
   EXPECTED_RAW_LOGICAL_IDS,
+  isHccpGasCapacityCsvFilename,
   isRawCsvFilename,
   resolveRawLogicalId,
 } from "@/lib/raw-data-config";
@@ -11,6 +12,12 @@ import {
 
 export const RAW_CONVERSION_FEED_IN_MASTER: ExpectedMasterSheetFile =
   "HKDL_Daily_Feed-in_Tariff_Report.xlsx";
+
+export const RAW_CONVERSION_HCCP_GAS_CAPACITY_CSV = "HCCP Gas Capacity.csv";
+
+/** 26 EMS CSVs + HCCP Gas Capacity + feed-in master. */
+export const RAW_CONVERSION_TOTAL_FILES =
+  EXPECTED_RAW_LOGICAL_IDS.length + 2;
 
 export type UploadBatchKind = "raw_conversion" | "master_replace";
 
@@ -31,15 +38,21 @@ export type UploadBatchOutcome = UploadBatchClassification | UploadBatchRejectio
 
 function classifyFiles(filenames: string[]): {
   rawLogicalIds: Set<string>;
+  hccpGasCapacityCsvCount: number;
   masterCanonical: Set<ExpectedMasterSheetFile>;
   unrecognized: string[];
 } {
   const rawLogicalIds = new Set<string>();
+  let hccpGasCapacityCsvCount = 0;
   const masterCanonical = new Set<ExpectedMasterSheetFile>();
   const unrecognized: string[] = [];
 
   for (const name of filenames) {
     if (isRawCsvFilename(name)) {
+      if (isHccpGasCapacityCsvFilename(name)) {
+        hccpGasCapacityCsvCount += 1;
+        continue;
+      }
       const id = resolveRawLogicalId(name);
       if (!id) {
         unrecognized.push(name);
@@ -63,12 +76,12 @@ function classifyFiles(filenames: string[]): {
     unrecognized.push(name);
   }
 
-  return { rawLogicalIds, masterCanonical, unrecognized };
+  return { rawLogicalIds, hccpGasCapacityCsvCount, masterCanonical, unrecognized };
 }
 
 /**
- * Oscar Nov 2026: success only for (a) 26 raw logical ids + feed-in master in one POST (27 files),
- * or (b) all four canonical masters. Everything else is blocking.
+ * Success only for (a) 26 EMS CSVs + HCCP Gas Capacity + feed-in (28 files),
+ * or (b) all four canonical masters.
  */
 export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
   if (filenames.length === 0) {
@@ -78,14 +91,14 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
     };
   }
 
-  const { rawLogicalIds, masterCanonical, unrecognized } =
+  const { rawLogicalIds, hccpGasCapacityCsvCount, masterCanonical, unrecognized } =
     classifyFiles(filenames);
 
   if (unrecognized.length > 0) {
     return {
       kind: "invalid",
       error:
-        "Unrecognized file(s) in batch. Upload either all four master workbooks or 26 raw CSVs plus HKDL Daily Feed-in Tariff Report.",
+        "Unrecognized file(s) in batch. Upload all four master workbooks, or 26 EMS CSVs plus HCCP Gas Capacity.csv and HKDL Daily Feed-in Tariff Report.",
     };
   }
 
@@ -113,8 +126,8 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
     return { kind: "master_replace" };
   }
 
-  if (rawCount > 0 || masterCanonical.size > 0) {
-    if (otherMasters.length > 0 && rawCount > 0) {
+  if (rawCount > 0 || masterCanonical.size > 0 || hccpGasCapacityCsvCount > 0) {
+    if (otherMasters.length > 0 && (rawCount > 0 || hccpGasCapacityCsvCount > 0)) {
       return {
         kind: "invalid",
         error:
@@ -123,22 +136,32 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
       };
     }
 
-    if (rawCount > 0) {
+    if (rawCount > 0 || hccpGasCapacityCsvCount > 0) {
       if (!hasFeedIn) {
         return {
           kind: "invalid",
           error:
-            "Raw conversion requires HKDL Daily Feed-in Tariff Report.xlsx in the same upload as all 26 raw CSV files.",
+            "Raw conversion requires HKDL Daily Feed-in Tariff Report.xlsx in the same upload as all EMS CSVs and HCCP Gas Capacity.csv.",
           missing: ["HKDL Daily Feed-in Tariff Report.xlsx"],
           uploaded: [...rawLogicalIds],
           requiredCount: EXPECTED_RAW_LOGICAL_IDS.length,
         };
       }
 
+      if (hccpGasCapacityCsvCount !== 1) {
+        return {
+          kind: "invalid",
+          error:
+            hccpGasCapacityCsvCount === 0
+              ? "Raw conversion requires HCCP Gas Capacity.csv with the 26 EMS CSV files."
+              : "Raw conversion expects exactly one HCCP Gas Capacity.csv per upload.",
+        };
+      }
+
       if (missingRaw.length > 0) {
         return {
           kind: "invalid",
-          error: "Incomplete raw batch (26 CSV files required with feed-in report)",
+          error: "Incomplete raw batch (26 EMS CSV files required with feed-in report)",
           missing: missingRaw,
           uploaded: [...rawLogicalIds],
           requiredCount: EXPECTED_RAW_LOGICAL_IDS.length,
@@ -146,22 +169,21 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
       }
 
       if (rawCount === EXPECTED_RAW_LOGICAL_IDS.length && hasFeedIn) {
-        const expectedFiles = EXPECTED_RAW_LOGICAL_IDS.length + 1;
-        if (filenames.length !== expectedFiles) {
+        if (filenames.length !== RAW_CONVERSION_TOTAL_FILES) {
           return {
             kind: "invalid",
-            error: `Raw conversion requires exactly ${expectedFiles} files (26 CSVs + HKDL Daily Feed-in Tariff Report), received ${filenames.length}.`,
+            error: `Raw conversion requires exactly ${RAW_CONVERSION_TOTAL_FILES} files (26 EMS CSVs + HCCP Gas Capacity + HKDL Daily Feed-in Tariff Report), received ${filenames.length}.`,
           };
         }
         return { kind: "raw_conversion" };
       }
     }
 
-    if (hasFeedIn && rawCount === 0 && masterCanonical.size === 1) {
+    if (hasFeedIn && rawCount === 0 && hccpGasCapacityCsvCount === 0 && masterCanonical.size === 1) {
       return {
         kind: "invalid",
         error:
-          "HKDL Daily Feed-in Tariff Report alone is not enough — include all 26 raw CSV files in the same upload.",
+          "HKDL Daily Feed-in Tariff Report alone is not enough — include all 26 EMS raw CSV files and HCCP Gas Capacity.csv in the same upload.",
         missing: [...EXPECTED_RAW_LOGICAL_IDS],
         requiredCount: EXPECTED_RAW_LOGICAL_IDS.length,
       };
@@ -181,6 +203,6 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
   return {
     kind: "invalid",
     error:
-      "Upload either all four master Excel workbooks or 26 raw CSVs plus HKDL Daily Feed-in Tariff Report (one batch, no mixing).",
+      "Upload either all four master Excel workbooks, or 26 EMS CSVs plus HCCP Gas Capacity.csv and HKDL Daily Feed-in Tariff Report (one batch, no mixing).",
   };
 }

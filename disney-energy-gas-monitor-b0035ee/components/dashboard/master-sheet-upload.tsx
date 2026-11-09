@@ -4,10 +4,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, Upload } from "lucide-react";
 import { DuplicateDateDialog } from "@/components/dashboard/duplicate-date-dialog";
+import { GasManualEntryDialog } from "@/components/dashboard/gas-manual-entry-dialog";
 import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dialog";
+import type { GasManualEntryRequest } from "@/components/dashboard/gas-manual-entry-dialog";
 import type { MasterSheetUploadMeta } from "@/lib/master-sheet-upload-meta";
 import type { RawCsvWarning } from "@/lib/raw-csv-validation";
 import type { DownloadableAfterWarning } from "@/lib/upload/downloadable-after-warnings";
+import { EXPECTED_RAW_LOGICAL_IDS } from "@/lib/expected-raw-logical-ids";
+import { EXPECTED_MASTER_SHEET_FILES } from "@/lib/expected-master-sheet-files";
+import {
+  RAW_CONVERSION_FEED_IN_MASTER,
+  RAW_CONVERSION_HCCP_GAS_CAPACITY_CSV,
+  RAW_CONVERSION_TOTAL_FILES,
+} from "@/lib/upload/batch-classifier";
+import { UPLOAD_TOKEN_STORAGE_KEY } from "@/components/dashboard/report-document-downloads";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 interface ExpectedFileStatus {
@@ -27,6 +37,12 @@ interface HostDataStatus {
 interface MasterSheetUploadProps {
   onUploadSuccess?: (meta: MasterSheetUploadMeta) => void;
 }
+
+const uploadFileListClass =
+  "list-disc space-y-1.5 pl-5 [list-style-position:outside] marker:text-slate-400";
+
+const uploadFileNameClass =
+  "font-mono text-[13px] leading-snug text-slate-800 break-words";
 
 export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
   const inputId = useId();
@@ -52,6 +68,10 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     null,
   );
   const [replacingDuplicate, setReplacingDuplicate] = useState(false);
+  const [gasManualEntry, setGasManualEntry] =
+    useState<GasManualEntryRequest | null>(null);
+  const [gasManualDialogOpen, setGasManualDialogOpen] = useState(false);
+  const pendingGasManualRef = useRef<GasManualEntryRequest | null>(null);
 
   const loadStatus = useCallback(() => {
     fetch("/api/master-sheets/upload")
@@ -72,6 +92,12 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  useEffect(() => {
+    if (uploadToken.trim()) {
+      sessionStorage.setItem(UPLOAD_TOKEN_STORAGE_KEY, uploadToken.trim());
+    }
+  }, [uploadToken]);
 
   const uploadFiles = async (
     fileList: FileList | File[],
@@ -152,6 +178,11 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         (json.downloadableAfterWarnings as
           | DownloadableAfterWarning[]
           | undefined) ?? [];
+      const gasEntry =
+        json.mode === "raw" && json.gasManualEntry
+          ? (json.gasManualEntry as GasManualEntryRequest)
+          : null;
+      pendingGasManualRef.current = gasEntry;
       if (warnings.length > 0) {
         setPostUploadWarnings(warnings);
         setDownloadableAfterWarnings(downloads);
@@ -160,6 +191,10 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         setPostUploadWarnings([]);
         setDownloadableAfterWarnings([]);
         setWarningsDialogOpen(false);
+        if (gasEntry) {
+          setGasManualEntry(gasEntry);
+          setGasManualDialogOpen(true);
+        }
       }
 
       loadStatus();
@@ -209,13 +244,12 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     <div className="space-y-3">
       <div>
         <h3 className="text-sm font-semibold text-brand-foreground">
-          Master sheet dropbox
+          Excel/Raw Data Dropbox
         </h3>
         <p className="mt-1 text-xs text-slate-500">
           Drop updated Excel files here. They replace files in{" "}
           <code className="text-[11px]">data/master-sheets</code> on the PC
-          running this app (your ngrok host). Spaces in filenames are fine — they
-          are saved under the standard underscore names the dashboard expects.
+          running this app.
         </p>
       </div>
 
@@ -252,7 +286,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
           if (!uploading) void uploadFiles(e.dataTransfer.files);
         }}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-6 text-center transition-colors",
+          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-10 text-center transition-colors",
           dragOver
             ? "border-brand bg-brand-light/80"
             : "border-brand-border bg-brand-light/30 hover:bg-brand-light/60",
@@ -261,7 +295,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       >
         <Upload className="h-6 w-6 text-brand-muted" />
         <span className="text-xs font-medium text-slate-700">
-          Drop all four masters, or 26 raw CSVs + feed-in report
+          Option A ({RAW_CONVERSION_TOTAL_FILES} rawdata files) or Option B (4
+          master excels)
         </span>
         <input
           id={inputId}
@@ -277,35 +312,89 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         />
       </label>
 
+      <div className="space-y-2">
+        <details className="rounded-md border border-brand-border bg-white/80 px-3 py-2.5 text-sm text-slate-600">
+          <summary className="cursor-pointer select-none text-sm font-medium text-slate-700">
+            Option A: Raw conversion — {RAW_CONVERSION_TOTAL_FILES} files
+          </summary>
+          <p className="mt-2 text-xs leading-snug text-slate-500">
+            Drop these together. All IVU CSVs must share the same{" "}
+            <code className="text-xs">Timestamp</code> day.
+          </p>
+          <p className="mt-3 text-sm font-medium text-slate-700">26 IVU CSVs</p>
+          <div className="mt-2 grid grid-cols-1 gap-x-8 gap-y-0 md:grid-cols-2">
+            {[
+              EXPECTED_RAW_LOGICAL_IDS.slice(0, 13),
+              EXPECTED_RAW_LOGICAL_IDS.slice(13),
+            ].map((column, colIndex) => (
+              <ul key={colIndex} className={cn(uploadFileListClass, "min-w-0")}>
+                {column.map((id) => (
+                  <li key={id} className={uploadFileNameClass}>
+                    {id}.csv
+                  </li>
+                ))}
+              </ul>
+            ))}
+          </div>
+          <p className="mt-3 text-sm font-medium text-slate-700">Plus</p>
+          <ul className={cn("mt-2", uploadFileListClass)}>
+            <li className={uploadFileNameClass}>
+              {RAW_CONVERSION_HCCP_GAS_CAPACITY_CSV}
+            </li>
+            <li className={uploadFileNameClass}>
+              {RAW_CONVERSION_FEED_IN_MASTER}
+            </li>
+          </ul>
+        </details>
+
+        <details className="rounded-md border border-brand-border bg-white/80 px-3 py-2.5 text-sm text-slate-600">
+          <summary className="cursor-pointer select-none text-sm font-medium text-slate-700">
+            Option B: Master workbooks — {EXPECTED_MASTER_SHEET_FILES.length}{" "}
+            files
+          </summary>
+          <p className="mt-2 text-xs leading-snug text-slate-500">
+            Drop all four updated Excel masters together. They replace the files
+            in <code className="text-xs">data/master-sheets</code>.
+          </p>
+          <ul className={cn("mt-3", uploadFileListClass)}>
+            {EXPECTED_MASTER_SHEET_FILES.map((name) => (
+              <li key={name} className={uploadFileNameClass}>
+                {name}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
+
       {hostStatus?.latestReportDate && (
         <p className="text-xs text-slate-700">
-          Host latest EMS date:{" "}
+          Host latest report date:{" "}
           <span className="font-medium">{hostStatus.latestReportDate}</span>
-          <span className="text-slate-500">
-            {" "}
-            (from files on the PC running this app — refresh the page to confirm
-            it matches)
-          </span>
         </p>
       )}
 
       {expected.length > 0 && (
-        <ul className="space-y-1 text-xs text-slate-600">
+        <ul className="space-y-0.5 text-sm text-slate-600">
           {expected.map((file) => (
-            <li key={file.name} className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-              <span className="flex gap-2">
+            <li key={file.name} className="py-0.5">
+              <div className="flex gap-2 leading-snug">
                 <span
-                  className={file.present ? "text-green-600" : "text-amber-600"}
+                  className={cn(
+                    "shrink-0",
+                    file.present ? "text-green-600" : "text-amber-600",
+                  )}
                   aria-hidden
                 >
                   {file.present ? "●" : "○"}
                 </span>
-                <span className="break-all">{file.name}</span>
-              </span>
-              {file.present && file.modifiedAt && (
-                <span className="text-[10px] text-slate-500 sm:ml-auto sm:shrink-0">
-                  {new Date(file.modifiedAt).toLocaleString()}
+                <span className={cn(uploadFileNameClass, "font-sans text-xs")}>
+                  {file.name}
                 </span>
+              </div>
+              {file.present && file.modifiedAt && (
+                <p className="pl-4 text-[11px] leading-tight text-slate-500">
+                  {new Date(file.modifiedAt).toLocaleString()}
+                </p>
               )}
             </li>
           ))}
@@ -320,12 +409,6 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
             on the host PC so only the four standard filenames remain.
           </p>
         )}
-
-      {hostStatus?.masterSheetsDirectory && (
-        <p className="text-[10px] leading-snug text-slate-500 break-all">
-          Host folder: {hostStatus.masterSheetsDirectory}
-        </p>
-      )}
 
       {uploading && (
         <p className="flex items-center gap-2 text-xs text-slate-600">
@@ -378,7 +461,33 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         downloadableAfterWarnings={downloadableAfterWarnings}
         uploadToken={uploadToken}
         open={warningsDialogOpen}
-        onDismiss={() => setWarningsDialogOpen(false)}
+        onDismiss={() => {
+          setWarningsDialogOpen(false);
+          const pending = pendingGasManualRef.current;
+          if (pending) {
+            setGasManualEntry(pending);
+            setGasManualDialogOpen(true);
+            pendingGasManualRef.current = null;
+          }
+        }}
+      />
+
+      <GasManualEntryDialog
+        request={gasManualEntry}
+        uploadToken={uploadToken}
+        open={gasManualDialogOpen}
+        onCompleted={(msg) => {
+          setMessage(msg);
+          loadStatus();
+          onUploadSuccess?.({
+            latestDate: hostStatus?.latestReportDate ?? null,
+            earliestDate: null,
+          });
+        }}
+        onDismiss={() => {
+          setGasManualDialogOpen(false);
+          setGasManualEntry(null);
+        }}
       />
     </div>
   );

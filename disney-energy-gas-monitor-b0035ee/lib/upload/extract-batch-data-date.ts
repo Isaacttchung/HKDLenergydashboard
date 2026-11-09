@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import { resolveExpectedMasterSheetFilename } from "@/lib/master-sheets-config";
 import { parseHkdlTop10Workbook } from "@/lib/datastore/parsers/hkdl-top10-parser";
+import { dailyReportDateFromEmsBatchDataDate } from "@/lib/hkdl-daily-report-date";
 import { isRawCsvFilename, resolveRawLogicalId } from "@/lib/raw-data-config";
 
 /** Parse EMS `Timestamp` cell to YYYY-MM-DD. */
@@ -62,3 +63,12 @@ export async function extractRawBatchDataDateFromFiles(
   }
   return extractRawBatchDataDate(texts);
 }
+
+/** Master/dashboard date = shared EMS `Timestamp` day from the raw batch. */
+export async function extractRawReportDateFromFiles(
+  files: File[],
+): Promise<string | null> {
+  const dataDate = await extractRawBatchDataDateFromFiles(files);
+  return dataDate ? dailyReportDateFromEmsBatchDataDate(dataDate) : null;
+}
+
