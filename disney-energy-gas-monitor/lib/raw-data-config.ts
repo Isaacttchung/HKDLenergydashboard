@@ -40,6 +40,11 @@ export function isRawCsvFilename(filename: string): boolean {
   return filename.toLowerCase().endsWith(".csv");
 }
 
+/** UI label for a logical raw upload id (Top_10 import sources are EMS `.csv` files). */
+export function rawLogicalIdDisplayFilename(logicalId: string): string {
+  return `${logicalId}.csv`;
+}
+
 /** Monthly HCCP gas meter capacity export (separate from the 26 EMS CSV batch). */
 export const HCCP_GAS_CAPACITY_LOGICAL_ID = "HCCP_Gas_Capacity";
 

@@ -90,9 +90,15 @@ export type RawUploadStubOutcome = RawUploadStubResult | RawUploadStubError;
 /**
  * Raw conversion: 26 EMS CSVs + HCCP Gas Capacity + feed-in → Top_10, Power_Solar, gas master.
  */
+export interface RawConversionUploadOptions {
+  replaceExisting?: boolean;
+  skipGasConversion?: boolean;
+  capacitySupplementTexts?: string[];
+}
+
 export async function handleRawConversionUpload(
   files: File[],
-  options: { replaceExisting?: boolean } = {},
+  options: RawConversionUploadOptions = {},
 ): Promise<RawUploadStubOutcome> {
   const saved: string[] = [];
   const skipped: Array<{ name: string; reason: string }> = [];
@@ -320,32 +326,46 @@ export async function handleRawConversionUpload(
 
   let gasConversionSummary = "";
   let gasConsumptionDate = "";
+  let gasManualEntry: GasManualEntryPrompt | undefined;
+  const skipGas = options.skipGasConversion === true;
   try {
     const archiveMeta = await saveHccpGasCapacityUpload(hccpGasCapacity.content);
     const pruned = await pruneHccpGasCapacityArchive(emsBatchDataDate);
     gasConsumptionDate = reportDate;
-    const capacityTexts = await loadHccpGasCapacityCsvTextsForConsumption(
-      gasConsumptionDate,
-      hccpGasCapacity.content,
-    );
-    const outdoorAirTempC = outdoorAirTempFromDaily1Csv(rawCsvByLogicalId);
-    if (outdoorAirTempC === null) {
-      return {
-        ok: false,
-        status: 400,
-        body: {
-          error:
-            "Could not compute outdoor air temperature from CCP+HCCP Daily1 (column BY)",
-        },
+    if (skipGas) {
+      gasConversionSummary = ` HCCP Gas Capacity archived (${archiveMeta.filename}${pruned.length > 0 ? `; pruned ${pruned.join(", ")}` : ""}); gas conversion skipped.`;
+    } else {
+      const capacityTexts = await loadHccpGasCapacityCsvTextsForConsumption(
+        gasConsumptionDate,
+        hccpGasCapacity.content,
+      );
+      const allCapacityTexts = [
+        ...capacityTexts,
+        ...(options.capacitySupplementTexts ?? []),
+      ];
+      const outdoorAirTempC = outdoorAirTempFromDaily1Csv(rawCsvByLogicalId);
+      if (outdoorAirTempC === null) {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error:
+              "Could not compute outdoor air temperature from CCP+HCCP Daily1 (column BY)",
+          },
+        };
+      }
+      const gasResult = await convertHccpGasMaster({
+        capacityCsvTexts: allCapacityTexts,
+        masterWorkbookPath: gasMasterPath,
+        consumptionDate: gasConsumptionDate,
+        outdoorAirTempC,
+      });
+      gasConversionSummary = ` Gas master ${gasConsumptionDate}: M1 ${gasResult.meter1}, M2 ${gasResult.meter2}, total ${gasResult.gasConsumptionUnits} units (archived ${archiveMeta.filename}${pruned.length > 0 ? `; pruned ${pruned.join(", ")}` : ""}).`;
+      gasManualEntry = {
+        consumptionDate: gasConsumptionDate,
+        required: true,
       };
     }
-    const gasResult = await convertHccpGasMaster({
-      capacityCsvTexts: capacityTexts,
-      masterWorkbookPath: gasMasterPath,
-      consumptionDate: gasConsumptionDate,
-      outdoorAirTempC,
-    });
-    gasConversionSummary = ` Gas master ${gasConsumptionDate}: M1 ${gasResult.meter1}, M2 ${gasResult.meter2}, total ${gasResult.gasConsumptionUnits} units (archived ${archiveMeta.filename}${pruned.length > 0 ? `; pruned ${pruned.join(", ")}` : ""}).`;
   } catch (error) {
     if (error instanceof HccpGasConversionError) {
       return {
@@ -396,14 +416,11 @@ export async function handleRawConversionUpload(
     warnings,
     logicalIds: uploadedIds,
     downloadableAfterWarnings,
-    gasManualEntry: {
-      consumptionDate: gasConsumptionDate,
-      required: true,
-    },
+    gasManualEntry,
     message:
       warnings.length > 0
-        ? `Processed raw batch for ${reportDate} (${warnings.length} validation warning(s)). Top_10, Power_Solar, and gas meters updated.${gasConversionSummary} Enter gas occupancy in the dialog.`
-        : `Processed raw batch for ${reportDate} with no validation warnings. Top_10, Power_Solar, and gas meters updated.${gasConversionSummary} Enter gas occupancy in the dialog.`,
+        ? `Processed raw batch for ${reportDate} (${warnings.length} validation warning(s)). Top_10 and Power_Solar updated.${skipGas ? " Gas conversion skipped." : " Gas meters updated."}${gasConversionSummary}${gasManualEntry ? " Enter gas occupancy in the dialog." : ""}`
+        : `Processed raw batch for ${reportDate} with no validation warnings. Top_10 and Power_Solar updated.${skipGas ? " Gas conversion skipped." : " Gas meters updated."}${gasConversionSummary}${gasManualEntry ? " Enter gas occupancy in the dialog." : ""}`,
   };
 }
 

@@ -5,13 +5,7 @@ import { MonthPicker } from "@/components/dashboard/month-picker";
 import { SingleDayPicker } from "@/components/dashboard/single-day-picker";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { StableSelect } from "@/components/ui/stable-select";
 import type { TimePreset } from "@/lib/types";
 import { buildYearOptions } from "@/lib/time-presets";
 import { cn } from "@/lib/utils";
@@ -88,18 +82,12 @@ export function TimeFilter({
       {timePreset === "ytd" && (
         <div className="space-y-2">
           <Label htmlFor="selected-year">Year</Label>
-          <Select value={selectedYear} onValueChange={onSelectedYearChange}>
-            <SelectTrigger id="selected-year">
-              <SelectValue placeholder="Select year" />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((year) => (
-                <SelectItem key={year} value={year}>
-                  {year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <StableSelect
+            id="selected-year"
+            value={selectedYear}
+            options={yearOptions.map((year) => ({ value: year, label: year }))}
+            onValueChange={onSelectedYearChange}
+          />
         </div>
       )}
 

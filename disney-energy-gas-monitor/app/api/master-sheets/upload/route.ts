@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { clearDataStoreCache } from "@/lib/datastore/master-sheet-store";
 import {
   EXPECTED_MASTER_SHEET_FILES,
-  getUploadTokenFromEnv,
   resolveExpectedMasterSheetFilename,
   MASTER_SHEETS_DIR,
 } from "@/lib/master-sheets-config";
@@ -16,19 +15,32 @@ import {
   parseReplaceExisting,
 } from "@/lib/upload/duplicate-date-guard";
 import {
+  checkOutOfOrderUpload,
+  parseConfirmOutOfOrderUpload,
+} from "@/lib/upload/out-of-order-upload-guard";
+import {
   extractMasterBatchDataDate,
   extractRawReportDateFromFiles,
 } from "@/lib/upload/extract-batch-data-date";
 import { saveMasterSnapshotForDate } from "@/lib/upload/date-snapshot-store";
+import {
+  extractPrimaryHccpGasCapacityCsv,
+  readHccpGasCapacitySupplements,
+} from "@/lib/upload/extract-hccp-gas-from-form";
+import {
+  GAS_CAPACITY_PREFLIGHT_CODE,
+  parseSkipGasConversion,
+  preflightHccpGasCapacityForConsumption,
+} from "@/lib/upload/hccp-gas-capacity-preflight";
 import { handleRawConversionUpload } from "@/lib/upload/raw-upload-stub";
+import {
+  checkMasterSheetUploadToken,
+  isMasterSheetUploadTokenRequired,
+} from "@/lib/upload/upload-token-auth";
 
 export const runtime = "nodejs";
 
 const MAX_BYTES = 40 * 1024 * 1024;
-
-function unauthorized() {
-  return NextResponse.json({ error: "Invalid upload token" }, { status: 401 });
-}
 
 function sanitizeFilename(raw: string): string | null {
   const base = path.basename(raw);
@@ -44,7 +56,7 @@ export async function GET() {
     const host = await getMasterSheetsHostStatus();
 
     return NextResponse.json({
-      requiresToken: Boolean(getUploadTokenFromEnv()),
+      requiresToken: isMasterSheetUploadTokenRequired(),
       expected: host.expected.map(({ name, present, modifiedAt, sizeBytes }) => ({
         name,
         present,
@@ -68,18 +80,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const requiredToken = getUploadTokenFromEnv();
-  if (requiredToken) {
-    const headerToken = request.headers.get("x-upload-token")?.trim();
-    const form = await request.formData();
-    const formToken = String(form.get("uploadToken") ?? "").trim();
-    if (headerToken !== requiredToken && formToken !== requiredToken) {
-      return unauthorized();
-    }
-    return handleUpload(form);
-  }
-
   const form = await request.formData();
+  const authFail = checkMasterSheetUploadToken(request, {
+    formToken: String(form.get("uploadToken") ?? ""),
+  });
+  if (authFail) return authFail;
   return handleUpload(form);
 }
 
@@ -91,6 +96,7 @@ async function handleUpload(form: FormData) {
 
   const files: File[] = entries.filter((e): e is File => e instanceof File);
   const replaceExisting = parseReplaceExisting(form);
+  const confirmOutOfOrder = parseConfirmOutOfOrderUpload(form);
   const classification = classifyUploadBatch(files.map((f) => f.name));
 
   if (classification.kind === "invalid") {
@@ -125,8 +131,56 @@ async function handleUpload(form: FormData) {
       );
     }
 
+    const outOfOrder = await checkOutOfOrderUpload({
+      incomingDate,
+      replaceExisting,
+      confirmOutOfOrder,
+    });
+    if (outOfOrder) {
+      return NextResponse.json(
+        {
+          error: "Out of order upload",
+          code: "OUT_OF_ORDER",
+          outOfOrder: true,
+          incomingDate: outOfOrder.incomingDate,
+          latestUploadDate: outOfOrder.latestUploadDate,
+          message: outOfOrder.message,
+        },
+        { status: 409 },
+      );
+    }
+
+    const skipGasConversion = parseSkipGasConversion(form);
+    const capacitySupplementTexts = await readHccpGasCapacitySupplements(form);
+
+    if (!skipGasConversion && incomingDate) {
+      const primaryCapacityCsv = await extractPrimaryHccpGasCapacityCsv(files);
+      if (primaryCapacityCsv) {
+        const preflight = await preflightHccpGasCapacityForConsumption(
+          incomingDate,
+          primaryCapacityCsv,
+          capacitySupplementTexts,
+        );
+        if (!preflight.ok) {
+          return NextResponse.json(
+            {
+              error: "Missing gas capacity midnights",
+              code: GAS_CAPACITY_PREFLIGHT_CODE,
+              gasCapacityPreflight: true,
+              consumptionDate: preflight.consumptionDate,
+              missingDates: preflight.missingDates,
+              message: preflight.message,
+            },
+            { status: 409 },
+          );
+        }
+      }
+    }
+
     const outcome = await handleRawConversionUpload(files, {
       replaceExisting,
+      skipGasConversion,
+      capacitySupplementTexts,
     });
     if (!outcome.ok) {
       return NextResponse.json(outcome.body, { status: outcome.status });

@@ -1,8 +1,7 @@
-import { readFile } from "fs/promises";
+import { access, readFile } from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getUploadTokenFromEnv,
   isExpectedMasterSheetFilename,
   MASTER_SHEETS_DIR,
 } from "@/lib/master-sheets-config";
@@ -12,21 +11,6 @@ import { resolveStagedRawFilePath } from "@/lib/upload/resolve-staged-raw-file";
 import { RAW_CONVERSION_FEED_IN_MASTER } from "@/lib/upload/batch-classifier";
 
 export const runtime = "nodejs";
-
-function unauthorized() {
-  return NextResponse.json({ error: "Invalid upload token" }, { status: 401 });
-}
-
-function checkToken(request: NextRequest): NextResponse | null {
-  const requiredToken = getUploadTokenFromEnv();
-  if (!requiredToken) return null;
-  const headerToken = request.headers.get("x-upload-token")?.trim();
-  const queryToken = request.nextUrl.searchParams.get("uploadToken")?.trim();
-  if (headerToken !== requiredToken && queryToken !== requiredToken) {
-    return unauthorized();
-  }
-  return null;
-}
 
 function contentTypeForDownload(
   kind: "raw" | "master",
@@ -43,10 +27,18 @@ function contentTypeForDownload(
   return "text/csv; charset=utf-8";
 }
 
-export async function GET(request: NextRequest) {
-  const authFailure = checkToken(request);
-  if (authFailure) return authFailure;
+async function liveMasterWorkbookPath(id: string): Promise<string | null> {
+  const filePath = path.join(MASTER_SHEETS_DIR, id);
+  try {
+    await access(filePath);
+    return filePath;
+  } catch {
+    return null;
+  }
+}
 
+/** Master/raw downloads are intentionally open; upload and Excel edit APIs stay token-gated. */
+export async function GET(request: NextRequest) {
   const kind = request.nextUrl.searchParams.get("kind");
   const id = request.nextUrl.searchParams.get("id")?.trim();
   const reportDate = request.nextUrl.searchParams.get("date")?.trim();
@@ -89,13 +81,15 @@ export async function GET(request: NextRequest) {
       kind as "raw" | "master",
       id,
     );
+    if (!filePath && kind === "master") {
+      filePath = await liveMasterWorkbookPath(id);
+    }
     if (!filePath) {
-      return NextResponse.json(
-        {
-          error: `No saved ${kind === "raw" ? "raw data" : "master"} snapshot for ${reportDate}. Upload Option A for that day first.`,
-        },
-        { status: 404 },
-      );
+      const error =
+        kind === "raw"
+          ? `No saved raw data snapshot for ${reportDate}. Upload Option A for that day first.`
+          : `Master workbook not found on host (${id}). Upload or place files in data/master-sheets.`;
+      return NextResponse.json({ error }, { status: 404 });
     }
   } else if (kind === "raw") {
     filePath = await resolveStagedRawFilePath(id);
@@ -124,7 +118,7 @@ export async function GET(request: NextRequest) {
   }
 
   const basename = path.basename(filePath);
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": contentTypeForDownload(
         kind as "raw" | "master",

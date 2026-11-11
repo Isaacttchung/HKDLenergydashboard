@@ -162,7 +162,8 @@ export async function loadGasMeterWorkbook(
 ): Promise<ExcelJS.Workbook> {
   const buffer = await readFile(masterWorkbookPath);
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
+  // exceljs typings declare their own Buffer (extends ArrayBuffer), not Node's Buffer.
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
   return workbook;
 }
 

@@ -1,6 +1,11 @@
+import { EXPECTED_RAW_LOGICAL_IDS } from "@/lib/expected-raw-logical-ids";
+
 /** External link index in Formula-DailyWeb4.xlsm → upload logical id (26-file set). */
 export const TOP10_LINK_ID_TO_LOGICAL_ID: Record<number, string> = {
   1: "Mercury_CCP",
+  2: "Mercury_HCCP",
+  3: "Mercury_Hotel",
+  4: "Mercury_Park",
   6: "SS200_TxA_1",
   7: "SS201_TxA_1",
   8: "SS201_TxB_1",
@@ -30,4 +35,38 @@ export function logicalIdForTop10Link(linkId: number): string {
     throw new Error(`Unknown RawData external link id ${linkId}`);
   }
   return id;
+}
+
+const TOP10_TEMPERATURE_ONLY_LOGICAL_ID = "CCP+HCCP_Daily1" as const;
+
+/** EMS CSVs that may back a WebSS row (26-file batch minus outdoor-temp Daily1). */
+export function top10ImportSourceLogicalIds(): string[] {
+  return EXPECTED_RAW_LOGICAL_IDS.filter(
+    (id) => id !== TOP10_TEMPERATURE_ONLY_LOGICAL_ID,
+  );
+}
+
+const LOGICAL_ID_TO_TOP10_LINK = Object.fromEntries(
+  Object.entries(TOP10_LINK_ID_TO_LOGICAL_ID).map(([linkId, logicalId]) => [
+    logicalId,
+    Number(linkId),
+  ]),
+) as Record<string, number>;
+
+export interface Top10EditorLinkOption {
+  linkId: number;
+  logicalId: string;
+}
+
+/** Options for Edit Excels insert (one per importable raw CSV, stable link ids). */
+export function top10EditorLinkOptions(): Top10EditorLinkOption[] {
+  return top10ImportSourceLogicalIds().map((logicalId) => {
+    const linkId = LOGICAL_ID_TO_TOP10_LINK[logicalId];
+    if (linkId === undefined) {
+      throw new Error(
+        `Top_10 link map missing logical id "${logicalId}" (import dropdown expects 25 sources)`,
+      );
+    }
+    return { linkId, logicalId };
+  });
 }

@@ -201,6 +201,16 @@ If that **data date** already exists in the masters / dashboard:
 
 Same behavior applies when uploading **four masters** (Mode B) if that date column already exists.
 
+### Top 10 master editor (phase 1)
+
+Sidebar **Edit Excels** opens a workbook/sheet picker (feed-in excluded), then the WebSS_Data editor for Top 10 when selected. Rename / insert / remove updates both `data/master-sheets/HKDL_Top_10.xlsx` and `data/master-schema/top-10-rawdata-rows.json` (created on first edit from the bundled mapping). Backups go to `data/master-editor-backups/<timestamp>/`. Uses the same upload token when `MASTER_SHEET_UPLOAD_TOKEN` is set.
+
+### Out-of-sequence upload (soft warning, Mode A only)
+
+**Raw conversion (Mode A) only** — not shown for the **four master workbooks (Mode B)** upload, since those files are assumed to be edited offline in order.
+
+If the raw batch **report date** is **more than one calendar day after** the latest date loaded from masters (for example latest **2026-10-14**, uploading **2026-11-01**), upload pauses with **Continue** / **Cancel**. The next sequential day (**2026-10-15** after **2026-10-14**) is allowed without prompting. **Continue** sets `confirmOutOfOrder` and proceeds; masters may end up with dates out of chronological order in Excel unless you upload in order.
+
 ### Blocking errors
 
 Upload fails (no master write) when for example:

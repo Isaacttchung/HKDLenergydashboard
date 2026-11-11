@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, Upload } from "lucide-react";
 import { DuplicateDateDialog } from "@/components/dashboard/duplicate-date-dialog";
+import { OutOfOrderUploadDialog } from "@/components/dashboard/out-of-order-upload-dialog";
+import { HccpGasCapacityPreflightDialog } from "@/components/dashboard/hccp-gas-capacity-preflight-dialog";
 import { GasManualEntryDialog } from "@/components/dashboard/gas-manual-entry-dialog";
 import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dialog";
 import type { GasManualEntryRequest } from "@/components/dashboard/gas-manual-entry-dialog";
@@ -17,7 +19,12 @@ import {
   RAW_CONVERSION_HCCP_GAS_CAPACITY_CSV,
   RAW_CONVERSION_TOTAL_FILES,
 } from "@/lib/upload/batch-classifier";
-import { UPLOAD_TOKEN_STORAGE_KEY } from "@/components/dashboard/report-document-downloads";
+import { UploadPasswordDialog } from "@/components/dashboard/upload-password-dialog";
+import { ExcelEditorComingSoonDialog } from "@/components/dashboard/excel-editor-coming-soon-dialog";
+import { ExcelEditorPickerDialog } from "@/components/dashboard/excel-editor-picker-dialog";
+import { Top10MasterEditorDialog } from "@/components/dashboard/top-10-master-editor-dialog";
+import type { ExcelEditorTarget } from "@/lib/master-editor/excel-editor-catalog";
+import { EXCEL_EDITOR_WORKBOOKS } from "@/lib/master-editor/excel-editor-catalog";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 interface ExpectedFileStatus {
@@ -44,11 +51,20 @@ const uploadFileListClass =
 const uploadFileNameClass =
   "font-mono text-[13px] leading-snug text-slate-800 break-words";
 
+type PasswordGatePurpose = "edit-excel" | "upload-files" | "upload-pick";
+
 export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
   const inputId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [requiresToken, setRequiresToken] = useState(false);
   const [expected, setExpected] = useState<ExpectedFileStatus[]>([]);
   const [uploadToken, setUploadToken] = useState("");
+  const [editExcelToken, setEditExcelToken] = useState("");
+  const uploadActionTokenRef = useRef<string | null>(null);
+  const pendingPickAwaitingAuthRef = useRef<File[] | null>(null);
+  const passwordPurposeRef = useRef<PasswordGatePurpose | null>(null);
+  const fileInputAnchorRef = useRef<HTMLDivElement>(null);
+  const passwordFilePickerHostRef = useRef<HTMLDivElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -68,6 +84,35 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     null,
   );
   const [replacingDuplicate, setReplacingDuplicate] = useState(false);
+  const [outOfOrderOpen, setOutOfOrderOpen] = useState(false);
+  const [outOfOrderIncoming, setOutOfOrderIncoming] = useState<string | null>(
+    null,
+  );
+  const [outOfOrderLatest, setOutOfOrderLatest] = useState<string | null>(null);
+  const [outOfOrderMessage, setOutOfOrderMessage] = useState<string | null>(
+    null,
+  );
+  const [confirmingOutOfOrder, setConfirmingOutOfOrder] = useState(false);
+  const [gasPreflightOpen, setGasPreflightOpen] = useState(false);
+  const [gasPreflightMessage, setGasPreflightMessage] = useState<string | null>(
+    null,
+  );
+  const [gasPreflightMissingDates, setGasPreflightMissingDates] = useState<
+    string[]
+  >([]);
+  const [confirmingGasPreflight, setConfirmingGasPreflight] = useState(false);
+  const hccpGasSupplementRef = useRef<File[]>([]);
+  const hccpGasSupplementInputRef = useRef<HTMLInputElement>(null);
+  const [excelPickerOpen, setExcelPickerOpen] = useState(false);
+  const [top10EditorOpen, setTop10EditorOpen] = useState(false);
+  const [comingSoonOpen, setComingSoonOpen] = useState(false);
+  const [comingSoonSheet, setComingSoonSheet] = useState<{
+    workbookId: ExcelEditorTarget["workbookId"];
+    sheetLabel: string;
+  } | null>(null);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordPurpose, setPasswordPurpose] =
+    useState<PasswordGatePurpose | null>(null);
   const [gasManualEntry, setGasManualEntry] =
     useState<GasManualEntryRequest | null>(null);
   const [gasManualDialogOpen, setGasManualDialogOpen] = useState(false);
@@ -93,22 +138,70 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     loadStatus();
   }, [loadStatus]);
 
-  useEffect(() => {
-    if (uploadToken.trim()) {
-      sessionStorage.setItem(UPLOAD_TOKEN_STORAGE_KEY, uploadToken.trim());
+  const clearUploadActionToken = useCallback(() => {
+    uploadActionTokenRef.current = null;
+    setUploadToken("");
+  }, []);
+
+  const clearEditExcelToken = useCallback(() => {
+    setEditExcelToken("");
+  }, []);
+
+  const openPasswordGate = useCallback((purpose: PasswordGatePurpose) => {
+    passwordPurposeRef.current = purpose;
+    setPasswordPurpose(purpose);
+    setPasswordDialogOpen(true);
+  }, []);
+
+  const triggerUploadFilePicker = useCallback(() => {
+    if (passwordPurposeRef.current !== "upload-pick") return;
+    const el = fileInputRef.current;
+    if (!el || uploading) return;
+    try {
+      if (typeof el.showPicker === "function") {
+        el.showPicker();
+        return;
+      }
+    } catch {
+      // fall through to click()
     }
-  }, [uploadToken]);
+    el.click();
+  }, [uploading]);
+
+  useEffect(() => {
+    const input = fileInputRef.current;
+    const dialogHost = passwordFilePickerHostRef.current;
+    const anchor = fileInputAnchorRef.current;
+    if (!input) return;
+    const reparent =
+      passwordDialogOpen && passwordPurpose === "upload-pick";
+    const target = reparent && dialogHost ? dialogHost : anchor;
+    if (target && input.parentElement !== target) {
+      target.appendChild(input);
+    }
+  }, [passwordDialogOpen, passwordPurpose]);
 
   const uploadFiles = async (
     fileList: FileList | File[],
-    options?: { replaceExisting?: boolean },
+    options?: {
+      replaceExisting?: boolean;
+      confirmOutOfOrder?: boolean;
+      skipGasConversion?: boolean;
+    },
+    tokenOverride?: string,
   ) => {
     const files = Array.from(fileList);
     if (files.length === 0) return;
 
     const replaceExisting = options?.replaceExisting ?? false;
+    const confirmOutOfOrder = options?.confirmOutOfOrder ?? false;
+    const skipGasConversion = options?.skipGasConversion ?? false;
     if (replaceExisting) {
       setReplacingDuplicate(true);
+    } else if (confirmOutOfOrder) {
+      setConfirmingOutOfOrder(true);
+    } else if (skipGasConversion) {
+      setConfirmingGasPreflight(true);
     } else {
       setUploading(true);
     }
@@ -119,17 +212,32 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     for (const file of files) {
       form.append("files", file);
     }
-    if (uploadToken.trim()) {
-      form.append("uploadToken", uploadToken.trim());
+    const token =
+      tokenOverride?.trim() ??
+      uploadActionTokenRef.current?.trim() ??
+      uploadToken.trim();
+    if (token) {
+      uploadActionTokenRef.current = token;
+      setUploadToken(token);
+      form.append("uploadToken", token);
     }
     if (replaceExisting) {
       form.append("replaceExisting", "true");
     }
+    if (confirmOutOfOrder) {
+      form.append("confirmOutOfOrder", "true");
+    }
+    for (const supplement of hccpGasSupplementRef.current) {
+      form.append("hccpGasCapacitySupplement", supplement);
+    }
+    if (skipGasConversion) {
+      form.append("skipGasConversion", "true");
+    }
 
     try {
       const headers: HeadersInit = {};
-      if (uploadToken.trim()) {
-        headers["x-upload-token"] = uploadToken.trim();
+      if (token) {
+        headers["x-upload-token"] = token;
       }
 
       const res = await fetch("/api/master-sheets/upload", {
@@ -138,6 +246,25 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         body: form,
       });
       const json = await res.json();
+
+      if (res.status === 409 && json.outOfOrder) {
+        pendingUploadRef.current = files;
+        setOutOfOrderIncoming((json.incomingDate as string) ?? null);
+        setOutOfOrderLatest((json.latestUploadDate as string) ?? null);
+        setOutOfOrderMessage((json.message as string) ?? null);
+        setOutOfOrderOpen(true);
+        return;
+      }
+
+      if (res.status === 409 && json.gasCapacityPreflight) {
+        pendingUploadRef.current = files;
+        setGasPreflightMessage((json.message as string) ?? null);
+        setGasPreflightMissingDates(
+          (json.missingDates as string[] | undefined) ?? [],
+        );
+        setGasPreflightOpen(true);
+        return;
+      }
 
       if (res.status === 409 && json.duplicateDate) {
         pendingUploadRef.current = files;
@@ -149,6 +276,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
 
       if (!res.ok) {
         setDuplicateDateOpen(false);
+        clearUploadActionToken();
         setError(json.error ?? "Upload failed");
         if (json.missing?.length) {
           setError(
@@ -163,9 +291,17 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       }
 
       pendingUploadRef.current = null;
+      hccpGasSupplementRef.current = [];
       setDuplicateDateOpen(false);
       setDuplicateDate(null);
       setDuplicateDateMessage(null);
+      setOutOfOrderOpen(false);
+      setOutOfOrderIncoming(null);
+      setOutOfOrderLatest(null);
+      setOutOfOrderMessage(null);
+      setGasPreflightOpen(false);
+      setGasPreflightMessage(null);
+      setGasPreflightMissingDates([]);
 
       const saved = (json.saved as string[]).join(", ");
       setMessage(
@@ -194,6 +330,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         if (gasEntry) {
           setGasManualEntry(gasEntry);
           setGasManualDialogOpen(true);
+        } else {
+          clearUploadActionToken();
         }
       }
 
@@ -221,6 +359,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     } finally {
       setUploading(false);
       setReplacingDuplicate(false);
+      setConfirmingOutOfOrder(false);
+      setConfirmingGasPreflight(false);
     }
   };
 
@@ -238,7 +378,95 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     setDuplicateDateOpen(false);
     setDuplicateDate(null);
     setDuplicateDateMessage(null);
+    clearUploadActionToken();
   };
+
+  const handleOutOfOrderContinue = () => {
+    const pending = pendingUploadRef.current;
+    if (!pending?.length) {
+      setOutOfOrderOpen(false);
+      return;
+    }
+    void uploadFiles(pending, { confirmOutOfOrder: true });
+  };
+
+  const handleOutOfOrderCancel = () => {
+    pendingUploadRef.current = null;
+    setOutOfOrderOpen(false);
+    setOutOfOrderIncoming(null);
+    setOutOfOrderLatest(null);
+    setOutOfOrderMessage(null);
+    clearUploadActionToken();
+  };
+
+  const handleGasPreflightContinue = () => {
+    const pending = pendingUploadRef.current;
+    if (!pending?.length) {
+      setGasPreflightOpen(false);
+      return;
+    }
+    void uploadFiles(pending, { skipGasConversion: true });
+  };
+
+  const handleGasPreflightCancel = () => {
+    pendingUploadRef.current = null;
+    hccpGasSupplementRef.current = [];
+    setGasPreflightOpen(false);
+    setGasPreflightMessage(null);
+    setGasPreflightMissingDates([]);
+    clearUploadActionToken();
+  };
+
+  const handleGasPreflightAddFile = () => {
+    hccpGasSupplementInputRef.current?.click();
+  };
+
+  const handleGasSupplementPicked = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const picked = e.target.files;
+    if (!picked?.length) return;
+    hccpGasSupplementRef.current = [
+      ...hccpGasSupplementRef.current,
+      ...Array.from(picked),
+    ];
+    e.target.value = "";
+    const pending = pendingUploadRef.current;
+    if (!pending?.length) return;
+    setGasPreflightOpen(false);
+    void uploadFiles(pending);
+  };
+
+  const handlePasswordSuccess = useCallback(
+    (token: string) => {
+      const trimmed = token.trim();
+      const purpose = passwordPurposeRef.current ?? passwordPurpose;
+      passwordPurposeRef.current = null;
+      setPasswordPurpose(null);
+      if (purpose === "edit-excel") {
+        setEditExcelToken(trimmed);
+        setExcelPickerOpen(true);
+      } else if (purpose === "upload-files") {
+        const pending = pendingUploadRef.current;
+        pendingUploadRef.current = null;
+        if (pending?.length) void uploadFiles(pending, undefined, trimmed);
+      } else if (purpose === "upload-pick") {
+        uploadActionTokenRef.current = trimmed;
+        const pendingPick = pendingPickAwaitingAuthRef.current;
+        pendingPickAwaitingAuthRef.current = null;
+        if (pendingPick?.length) {
+          void uploadFiles(pendingPick, undefined, trimmed);
+          setPasswordDialogOpen(false);
+        }
+      }
+    },
+    [passwordPurpose],
+  );
+
+  const passwordDialogDescription =
+    passwordPurpose === "edit-excel"
+      ? "Enter the host upload password before choosing a workbook to edit."
+      : "Enter the host upload password before files are sent to the dropbox.";
 
   return (
     <div className="space-y-3">
@@ -253,28 +481,68 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         </p>
       </div>
 
-      {requiresToken && (
-        <div className="space-y-1">
-          <label
-            htmlFor={`${inputId}-token`}
-            className="text-xs font-medium text-slate-600"
-          >
-            Upload password
-          </label>
-          <input
-            id={`${inputId}-token`}
-            type="password"
-            autoComplete="off"
-            value={uploadToken}
-            onChange={(e) => setUploadToken(e.target.value)}
-            className="w-full rounded-md border border-brand-border px-2 py-1.5 text-sm"
-            placeholder="From host .env.local (test default: 12345)"
-          />
-        </div>
-      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={() => {
+          if (requiresToken) {
+            openPasswordGate("edit-excel");
+            return;
+          }
+          setExcelPickerOpen(true);
+        }}
+      >
+        Edit Excels
+      </Button>
 
+      <div ref={fileInputAnchorRef} className="sr-only" aria-hidden>
+        <input
+          ref={hccpGasSupplementInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          tabIndex={-1}
+          disabled={uploading || confirmingGasPreflight}
+          onChange={handleGasSupplementPicked}
+        />
+        <input
+          ref={fileInputRef}
+          id={inputId}
+          type="file"
+          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+          multiple
+          tabIndex={-1}
+          disabled={uploading}
+          onChange={(e) => {
+            const picked = e.target.files;
+            if (!picked?.length) return;
+            const files = Array.from(picked);
+            const actionToken = uploadActionTokenRef.current;
+            if (requiresToken && !actionToken) {
+              pendingPickAwaitingAuthRef.current = files;
+            } else {
+              void uploadFiles(picked, undefined, actionToken ?? undefined);
+              uploadActionTokenRef.current = null;
+              if (passwordDialogOpen) {
+                setPasswordDialogOpen(false);
+                passwordPurposeRef.current = null;
+                setPasswordPurpose(null);
+              }
+            }
+            e.target.value = "";
+          }}
+        />
+      </div>
       <label
-        htmlFor={inputId}
+        htmlFor={requiresToken ? undefined : inputId}
+        onClick={(e) => {
+          if (uploading) return;
+          if (requiresToken) {
+            e.preventDefault();
+            openPasswordGate("upload-pick");
+          }
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -283,7 +551,15 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         onDrop={(e) => {
           e.preventDefault();
           setDragOver(false);
-          if (!uploading) void uploadFiles(e.dataTransfer.files);
+          if (uploading) return;
+          const dropped = e.dataTransfer.files;
+          if (dropped.length === 0) return;
+          if (requiresToken) {
+            pendingUploadRef.current = Array.from(dropped);
+            openPasswordGate("upload-files");
+            return;
+          }
+          void uploadFiles(dropped);
         }}
         className={cn(
           "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-10 text-center transition-colors",
@@ -298,18 +574,6 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
           Option A ({RAW_CONVERSION_TOTAL_FILES} rawdata files) or Option B (4
           master excels)
         </span>
-        <input
-          id={inputId}
-          type="file"
-          accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-          multiple
-          className="sr-only"
-          disabled={uploading}
-          onChange={(e) => {
-            if (e.target.files) void uploadFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
       </label>
 
       <div className="space-y-2">
@@ -456,6 +720,75 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         onCancel={handleDuplicateCancel}
       />
 
+      <ExcelEditorPickerDialog
+        open={excelPickerOpen}
+        onClose={() => {
+          setExcelPickerOpen(false);
+          clearEditExcelToken();
+        }}
+        onConfirm={(target) => {
+          setExcelPickerOpen(false);
+          if (target.editor === "top10_webss") {
+            setTop10EditorOpen(true);
+            return;
+          }
+          const workbook = EXCEL_EDITOR_WORKBOOKS.find(
+            (w) => w.id === target.workbookId,
+          );
+          const sheet = workbook?.sheets.find((s) => s.id === target.sheetId);
+          setComingSoonSheet({
+            workbookId: target.workbookId,
+            sheetLabel: sheet?.label ?? target.sheetId,
+          });
+          setComingSoonOpen(true);
+        }}
+      />
+
+      <Top10MasterEditorDialog
+        open={top10EditorOpen}
+        uploadToken={editExcelToken}
+        onClose={() => {
+          setTop10EditorOpen(false);
+          setExcelPickerOpen(false);
+          clearEditExcelToken();
+        }}
+        onBackToPicker={() => {
+          setTop10EditorOpen(false);
+          setExcelPickerOpen(true);
+        }}
+      />
+
+      <ExcelEditorComingSoonDialog
+        open={comingSoonOpen}
+        workbookId={comingSoonSheet?.workbookId ?? null}
+        sheetLabel={comingSoonSheet?.sheetLabel ?? null}
+        onClose={() => {
+          setComingSoonOpen(false);
+          setComingSoonSheet(null);
+          clearEditExcelToken();
+        }}
+      />
+
+      <OutOfOrderUploadDialog
+        incomingDate={outOfOrderIncoming}
+        latestUploadDate={outOfOrderLatest}
+        message={outOfOrderMessage}
+        open={outOfOrderOpen}
+        confirming={confirmingOutOfOrder}
+        onContinue={handleOutOfOrderContinue}
+        onCancel={handleOutOfOrderCancel}
+      />
+
+      <HccpGasCapacityPreflightDialog
+        message={gasPreflightMessage}
+        missingDates={gasPreflightMissingDates}
+        open={gasPreflightOpen}
+        busy={confirmingGasPreflight || uploading}
+        onCancel={handleGasPreflightCancel}
+        onAddCapacityFile={handleGasPreflightAddFile}
+        onContinueAnyway={handleGasPreflightContinue}
+      />
+
       <UploadWarningsDialog
         warnings={postUploadWarnings}
         downloadableAfterWarnings={downloadableAfterWarnings}
@@ -468,6 +801,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
             setGasManualEntry(pending);
             setGasManualDialogOpen(true);
             pendingGasManualRef.current = null;
+          } else {
+            clearUploadActionToken();
           }
         }}
       />
@@ -487,6 +822,37 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         onDismiss={() => {
           setGasManualDialogOpen(false);
           setGasManualEntry(null);
+          clearUploadActionToken();
+        }}
+      />
+
+      <UploadPasswordDialog
+        open={passwordDialogOpen}
+        description={passwordDialogDescription}
+        filePickerHostRef={passwordFilePickerHostRef}
+        closeOnSuccess={passwordPurpose !== "upload-pick"}
+        onClose={() => {
+          setPasswordDialogOpen(false);
+          setPasswordPurpose((purpose) => {
+            if (purpose === "upload-files") {
+              pendingUploadRef.current = null;
+            }
+            if (purpose === "upload-pick") {
+              uploadActionTokenRef.current = null;
+              pendingPickAwaitingAuthRef.current = null;
+            }
+            passwordPurposeRef.current = null;
+            return null;
+          });
+        }}
+        onSuccess={handlePasswordSuccess}
+        onContinueUserGesture={
+          passwordPurpose === "upload-pick" ? triggerUploadFilePicker : undefined
+        }
+        onVerificationFailed={() => {
+          if (passwordPurposeRef.current === "upload-pick") {
+            pendingPickAwaitingAuthRef.current = null;
+          }
         }}
       />
     </div>

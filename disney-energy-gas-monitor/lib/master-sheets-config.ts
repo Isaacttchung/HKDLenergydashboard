@@ -49,7 +49,10 @@ export function resolveExpectedMasterSheetFilename(
   return null;
 }
 
-export function getUploadTokenFromEnv(): string | undefined {
-  const token = process.env.MASTER_SHEET_UPLOAD_TOKEN?.trim();
-  return token || undefined;
+/** Upload / Edit Excels gate password (override with env `MASTER_SHEET_UPLOAD_TOKEN` if set). */
+export const MASTER_SHEET_UPLOAD_PASSWORD = "12345";
+
+export function getUploadTokenFromEnv(): string {
+  const fromEnv = process.env.MASTER_SHEET_UPLOAD_TOKEN?.trim();
+  return fromEnv || MASTER_SHEET_UPLOAD_PASSWORD;
 }

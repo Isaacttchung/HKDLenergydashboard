@@ -12,4 +12,3 @@
     "install:app": "npm --prefix disney-energy-gas-monitor install"
   }
 }
-

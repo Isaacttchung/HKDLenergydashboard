@@ -6,13 +6,7 @@ import { MonthPicker } from "@/components/dashboard/month-picker";
 import { SingleDayPicker } from "@/components/dashboard/single-day-picker";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { StableSelect } from "@/components/ui/stable-select";
 import type { DailyBreakdown } from "@/lib/types";
 import type { PeriodComparisonContextMetrics } from "@/lib/period-comparison/context-metric-rows";
 import type { PeriodComparisonMode } from "@/lib/period-comparison/resolve-breakdown";
@@ -354,23 +348,17 @@ export function PeriodComparisonWorkspace({
                           </Button>
                         )}
                       </div>
-                      <Select
+                      <StableSelect
+                        id={`period-comp-year-${index}`}
                         value={year}
+                        options={yearOptions.map((option) => ({
+                          value: option,
+                          label: option,
+                        }))}
                         onValueChange={(value) =>
                           updatePeriodList(setYears, index, value)
                         }
-                      >
-                        <SelectTrigger id={`period-comp-year-${index}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {yearOptions.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      />
                     </div>
                   ))}
               </div>

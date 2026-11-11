@@ -76,6 +76,20 @@ export function resolveWebSsRow(
   return null;
 }
 
+/** Resolve mapping entry for a WebSS sheet row (same rules as raw conversion). */
+export function findMappingForWebSsRow<
+  T extends { meter: string; location: string; kind?: string },
+>(index: Map<string, number>, sheetRow: number, rows: T[]): T | undefined {
+  for (const row of rows) {
+    if (row.kind === "skip" && !String(row.meter).trim() && !String(row.location).trim()) {
+      continue;
+    }
+    const resolved = resolveWebSsRow(index, String(row.meter), row.location);
+    if (resolved === sheetRow) return row;
+  }
+  return undefined;
+}
+
 export function findWebSsDateColumn(
   sheet: XLSX.WorkSheet,
   dataDate: string,

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "fs/promises";
 import * as XLSX from "xlsx";
-import rawDataRows from "@/lib/raw-to-master/top-10-rawdata-rows.json";
+import { getTop10RawDataRows } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
 import {
   csvColumnDailyAverage,
   csvColumnDailyDeltaKwh,
@@ -17,6 +17,10 @@ import {
 } from "@/lib/raw-to-master/top-10-webss";
 
 import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
+import {
+  SUM_CCP1_SUBTRAHEND_RAW_DATA_ROW,
+  SUM_CCP1_SUMMAND_RAW_DATA_ROWS,
+} from "@/lib/raw-to-master/top-10-sum-ccp1";
 
 export const TOP10_MASTER_FILENAME = "HKDL_Top_10.xlsx";
 
@@ -48,7 +52,7 @@ export class Top10ConversionError extends Error {
   }
 }
 
-type RawRow = (typeof rawDataRows)[number];
+type RawRow = ReturnType<typeof getTop10RawDataRows>[number];
 
 function resolveCsv(
   rawCsvByLogicalId: Record<string, string>,
@@ -76,7 +80,7 @@ function computeRowKwh(
 
   if (row.kind === "aggregate300") {
     let sum = 0;
-    for (let excelRow = 147; excelRow <= 152; excelRow += 1) {
+    for (const excelRow of SUM_CCP1_SUMMAND_RAW_DATA_ROWS) {
       const v = computedByRawDataRow.get(excelRow);
       if (v === undefined) {
         throw new Top10ConversionError(
@@ -86,10 +90,10 @@ function computeRowKwh(
       }
       sum += v;
     }
-    const sub = computedByRawDataRow.get(153);
+    const sub = computedByRawDataRow.get(SUM_CCP1_SUBTRAHEND_RAW_DATA_ROW);
     if (sub === undefined) {
       throw new Top10ConversionError(
-        "Row 300 aggregate missing computed value for RawData row 153",
+        `Row 300 aggregate missing computed value for RawData row ${SUM_CCP1_SUBTRAHEND_RAW_DATA_ROW}`,
         "MISSING_RAW",
       );
     }
@@ -132,6 +136,7 @@ function computeOutdoorTempC(
 export async function convertTop10Master(
   input: Top10ConversionInput,
 ): Promise<Top10ConversionResult> {
+  const rawDataRows = getTop10RawDataRows();
   const hasSolar = rawDataRows.some(
     (r) => r.kind === "solar" && r.feedInTariffColumns.length > 0,
   );
