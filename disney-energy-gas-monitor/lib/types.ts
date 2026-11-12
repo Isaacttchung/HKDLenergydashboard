@@ -252,6 +252,37 @@ export interface PeriodReportExtremum {
   resortElectricityTotal: number;
 }
 
+export interface MobileFuelBreakdownLine {
+  label: string;
+  liters: number;
+}
+
+/** Park mobile gasoline / diesel (liters) from Mode C upload — monthly granularity. */
+export interface MobileFuelsSummary {
+  gasolineLiters: number | null;
+  dieselLiters: number | null;
+  gasolineBreakdown: MobileFuelBreakdownLine[];
+  dieselBreakdown: MobileFuelBreakdownLine[];
+  /** Single-day preset shows the calendar month total, not a daily reading. */
+  isMonthlyGranularity?: boolean;
+}
+
+export interface ResortGasMjLine {
+  label: string;
+  mj: number;
+}
+
+/** Monthly utilities TGMJ gas (MJ) — monthly granularity only. */
+export interface MonthlyResortGasSummary {
+  available: boolean;
+  areas: ResortGasMjLine[];
+  hotelMj: number | null;
+  hotelBreakdown: ResortGasMjLine[];
+  backOfHouseMj: number | null;
+  backOfHouseBreakdown: ResortGasMjLine[];
+  isMonthlyGranularity?: boolean;
+}
+
 export interface PeriodContextSummary {
   outdoorTempCAvg?: number;
   ballroomUtilizationPctAvg?: number;
@@ -273,6 +304,8 @@ export interface MonthlyReportSummary {
   highestDay: PeriodReportExtremum;
   lowestDay: PeriodReportExtremum;
   context?: PeriodContextSummary | null;
+  mobileFuels?: MobileFuelsSummary | null;
+  resortGas?: MonthlyResortGasSummary | null;
 }
 
 export interface YearlyReportSummary {
@@ -284,6 +317,8 @@ export interface YearlyReportSummary {
   highestMonth: PeriodReportExtremum;
   lowestMonth: PeriodReportExtremum;
   context?: PeriodContextSummary | null;
+  mobileFuels?: MobileFuelsSummary | null;
+  resortGas?: MonthlyResortGasSummary | null;
 }
 
 export interface CustomRangeReportSummary {
@@ -295,6 +330,8 @@ export interface CustomRangeReportSummary {
   highestDay: PeriodReportExtremum;
   lowestDay: PeriodReportExtremum;
   context?: PeriodContextSummary | null;
+  mobileFuels?: MobileFuelsSummary | null;
+  resortGas?: MonthlyResortGasSummary | null;
 }
 
 export interface PeriodData {
@@ -312,6 +349,8 @@ export interface PeriodData {
   monthlyReportSummary?: MonthlyReportSummary;
   yearlyReportSummary?: YearlyReportSummary;
   customRangeReportSummary?: CustomRangeReportSummary;
+  mobileFuels?: MobileFuelsSummary | null;
+  resortGas?: MonthlyResortGasSummary | null;
 }
 
 export interface DeltaTotals {

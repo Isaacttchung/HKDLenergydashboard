@@ -10,16 +10,23 @@ import {
 } from "@/components/ui/popover";
 import { cn, formatNumber } from "@/lib/utils";
 import type { DailyContext } from "@/lib/daily-context";
-import type { PeriodContextSummary } from "@/lib/types";
+import type {
+  MobileFuelBreakdownLine,
+  MobileFuelsSummary,
+  PeriodContextSummary,
+} from "@/lib/types";
 
 interface PeriodContextCardsProps {
   dailyContext?: DailyContext | null;
   periodContext?: PeriodContextSummary | null;
+  mobileFuels?: MobileFuelsSummary | null;
   gasKwh?: number;
   gasUnits?: number;
   electricityKwh?: number;
   electricityLabel?: string;
 }
+
+const NA_VALUE = "N/A";
 
 function StatCard({
   label,
@@ -34,16 +41,124 @@ function StatCard({
   sub?: string;
   valueClassName?: string;
 }) {
+  const isNa = value === NA_VALUE;
   return (
     <div className="rounded-lg border bg-white p-4">
       <div className="flex items-center gap-0.5">
         <p className="text-xs text-slate-500">{label}</p>
         {labelExtra}
       </div>
-      <p className={`text-xl font-semibold ${valueClassName ?? ""}`}>{value}</p>
+      <p
+        className={cn(
+          "text-xl font-semibold",
+          isNa ? "text-slate-400" : (valueClassName ?? ""),
+        )}
+      >
+        {value}
+      </p>
       {sub && <p className="text-xs text-slate-500">{sub}</p>}
     </div>
   );
+}
+
+function formatOptionalNumber(
+  value: number | undefined,
+  format: (n: number) => string,
+): string {
+  if (value === undefined || !Number.isFinite(value)) {
+    return NA_VALUE;
+  }
+  return format(value);
+}
+
+const DEFAULT_GASOLINE_BREAKDOWN: MobileFuelBreakdownLine[] = [
+  { label: "Gasoline station", liters: 0 },
+  { label: "Train station", liters: 0 },
+];
+
+const DEFAULT_DIESEL_BREAKDOWN: MobileFuelBreakdownLine[] = [
+  { label: "Shuttle", liters: 0 },
+  { label: "Diesel station", liters: 0 },
+];
+
+function MobileFuelStatCard({
+  label,
+  value,
+  breakdown,
+  fallbackBreakdown,
+  ariaLabel,
+}: {
+  label: string;
+  value: string;
+  breakdown: MobileFuelBreakdownLine[];
+  fallbackBreakdown: MobileFuelBreakdownLine[];
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const isNa = value === NA_VALUE;
+  const lines = breakdown.length > 0 ? breakdown : fallbackBreakdown;
+  const showBreakdown =
+    breakdown.length > 0 || fallbackBreakdown.length > 0;
+
+  return (
+    <div className="rounded-lg border bg-white p-4">
+      <div className="flex min-w-0 items-start gap-1">
+        {showBreakdown ? (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex max-w-full items-center gap-1 text-left text-xs text-slate-500 hover:text-slate-800"
+                aria-label={ariaLabel}
+                aria-expanded={open}
+              >
+                <span className="min-w-0 leading-snug">{label}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform",
+                    open && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="z-50 w-56 p-2">
+              <ul className="space-y-1.5 text-xs text-slate-700">
+                {lines.map((line) => (
+                  <li
+                    key={line.label}
+                    className="flex items-baseline justify-between gap-3"
+                  >
+                    <span className="text-slate-600">{line.label}</span>
+                    <span className="shrink-0 font-medium tabular-nums">
+                      {isNa ? NA_VALUE : `${formatNumber(line.liters)} L`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <p className="text-xs text-slate-500">{label}</p>
+        )}
+      </div>
+      <p
+        className={cn(
+          "text-xl font-semibold",
+          isNa ? "text-slate-400" : "",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function formatFuelLiters(liters: number | null | undefined): string {
+  if (liters === null || liters === undefined || !Number.isFinite(liters)) {
+    return NA_VALUE;
+  }
+  return `${formatNumber(liters)} L`;
 }
 
 function GasUnitMenu({
@@ -93,6 +208,7 @@ function GasUnitMenu({
 export function PeriodContextCards({
   dailyContext,
   periodContext,
+  mobileFuels = null,
   gasKwh = 0,
   gasUnits = 0,
   electricityKwh = 0,
@@ -124,19 +240,15 @@ export function PeriodContextCards({
     ? (periodContext?.daysWithGasReadings ?? 0) > 0 || gasKwh > 0
     : dailyContext?.gasUnits !== undefined;
 
-  const hasContextCards =
-    outdoorTemp !== undefined ||
-    ballroom !== undefined ||
-    hotelOccupancy !== undefined ||
-    sunshine !== undefined ||
-    rainfall !== undefined;
-
-  const hasEnergyRow = electricityKwh > 0 || hasGasConsumption;
+  const showContextMetrics = isPeriod || dailyContext != null;
+  const hasEnergyRow =
+    isPeriod || electricityKwh > 0 || hasGasConsumption;
   const showCombinedEnergy =
     electricityKwh > 0 && hasGasConsumption;
   const combinedEnergyKwh = electricityKwh + gasKwh;
 
-  if (!hasContextCards && !hasEnergyRow) return null;
+  const showMobileFuelRow = true;
+  if (!showContextMetrics && !hasEnergyRow && !showMobileFuelRow) return null;
 
   const tempLabel = isPeriod ? "Avg Outdoor Temperature" : "Avg Outdoor Temperature";
   const ballroomLabel = isPeriod ? "Avg Ballroom Utilization" : "Ballroom Utilization";
@@ -144,84 +256,129 @@ export function PeriodContextCards({
     ? "Avg Overall Hotel Occupancy"
     : "Overall Hotel Occupancy";
   const sunshineLabel = isPeriod ? "Avg Sunshine" : "Sunshine";
+  const rainfallLabel = isPeriod ? "Avg Rainfall" : "Rainfall";
   const gasLabel = isPeriod ? "Total Gas Consumption" : "Total Gas Consumption";
+  const gasolineLabel =
+    !isPeriod && mobileFuels?.isMonthlyGranularity
+      ? "Total Gasoline Usage (Monthly)"
+      : "Total Gasoline Usage";
+  const dieselLabel =
+    !isPeriod && mobileFuels?.isMonthlyGranularity
+      ? "Total Diesel Usage (Monthly)"
+      : "Total Diesel Usage";
+  const gasolineValue = formatFuelLiters(mobileFuels?.gasolineLiters);
+  const dieselValue = formatFuelLiters(mobileFuels?.dieselLiters);
+  const gasolineBreakdown = mobileFuels?.gasolineBreakdown ?? [];
+  const dieselBreakdown = mobileFuels?.dieselBreakdown ?? [];
+
+  const gasPrimaryValue =
+    !hasGasConsumption
+      ? NA_VALUE
+      : gasDisplayUnit === "mj"
+        ? `${formatNumber(gasUnitsToMj(resolvedGasUnits))} MJ`
+        : `${formatNumber(gasKwh)} kWh`;
+
+  const gasSub =
+    hasGasConsumption &&
+    resolvedGasUnits >= 0 &&
+    (isPeriod || dailyContext?.gasUnits !== undefined)
+      ? `${formatNumber(resolvedGasUnits)} units`
+      : undefined;
 
   return (
     <div className="space-y-4">
-      {hasContextCards && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {outdoorTemp !== undefined && (
-              <StatCard
-                label={tempLabel}
-                value={`${formatNumber(outdoorTemp, isPeriod ? 1 : 0)} °C`}
-              />
+      {showContextMetrics && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label={tempLabel}
+            value={formatOptionalNumber(outdoorTemp, (n) =>
+              `${formatNumber(n, isPeriod ? 1 : 0)} °C`,
             )}
-            {sunshine !== undefined && (
-              <StatCard
-                label={sunshineLabel}
-                value={`${formatNumber(sunshine, isPeriod ? 1 : 0)} hr`}
-              />
+          />
+          <StatCard
+            label={sunshineLabel}
+            value={formatOptionalNumber(sunshine, (n) =>
+              `${formatNumber(n, isPeriod ? 1 : 0)} hr`,
             )}
-            {rainfall !== undefined && (
-              <StatCard
-                label={isPeriod ? "Avg Rainfall" : "Rainfall"}
-                value={`${formatNumber(rainfall, rainfall % 1 === 0 ? 0 : 1)} mm`}
-              />
+          />
+          <StatCard
+            label={ballroomLabel}
+            value={formatOptionalNumber(ballroom, (n) =>
+              `${formatNumber(n, isPeriod ? 1 : 0)}%`,
             )}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {ballroom !== undefined && (
-              <StatCard
-                label={ballroomLabel}
-                value={`${formatNumber(ballroom, isPeriod ? 1 : 0)}%`}
-              />
+          />
+          <StatCard
+            label={occupancyLabel}
+            value={formatOptionalNumber(hotelOccupancy, (n) =>
+              `${formatNumber(n, 1)}%`,
             )}
-            {hotelOccupancy !== undefined && (
-              <StatCard
-                label={occupancyLabel}
-                value={`${formatNumber(hotelOccupancy, 1)}%`}
-              />
-            )}
-          </div>
+          />
+        </div>
+      )}
+
+      {showMobileFuelRow && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {showContextMetrics && (
+            <StatCard
+              label={rainfallLabel}
+              value={formatOptionalNumber(rainfall, (n) =>
+                `${formatNumber(n, n % 1 === 0 ? 0 : 1)} mm`,
+              )}
+            />
+          )}
+          {!showContextMetrics && (
+            <StatCard label={rainfallLabel} value={NA_VALUE} />
+          )}
+          <MobileFuelStatCard
+            label={gasolineLabel}
+            value={gasolineValue}
+            breakdown={gasolineBreakdown}
+            fallbackBreakdown={DEFAULT_GASOLINE_BREAKDOWN}
+            ariaLabel="Show gasoline usage by location"
+          />
+          <MobileFuelStatCard
+            label={dieselLabel}
+            value={dieselValue}
+            breakdown={dieselBreakdown}
+            fallbackBreakdown={DEFAULT_DIESEL_BREAKDOWN}
+            ariaLabel="Show diesel usage by location"
+          />
         </div>
       )}
 
       {hasEnergyRow && (
         <div
-          className={`grid gap-4 ${showCombinedEnergy ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
+          className={`grid gap-4 ${isPeriod || showCombinedEnergy ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
         >
-          {electricityKwh > 0 && (
-            <StatCard
-              label={electricityLabel}
-              value={`${formatNumber(electricityKwh)} kWh`}
-            />
-          )}
-          {hasGasConsumption && (
-            <StatCard
-              label={gasLabel}
-              labelExtra={
+          <StatCard
+            label={electricityLabel}
+            value={
+              electricityKwh > 0
+                ? `${formatNumber(electricityKwh)} kWh`
+                : NA_VALUE
+            }
+          />
+          <StatCard
+            label={gasLabel}
+            labelExtra={
+              hasGasConsumption ? (
                 <GasUnitMenu
                   unit={gasDisplayUnit}
                   onUnitChange={setGasDisplayUnit}
                 />
-              }
-              value={
-                gasDisplayUnit === "mj"
-                  ? `${formatNumber(gasUnitsToMj(resolvedGasUnits))} MJ`
-                  : `${formatNumber(gasKwh)} kWh`
-              }
-              sub={
-                resolvedGasUnits >= 0 && (isPeriod || dailyContext?.gasUnits !== undefined)
-                  ? `${formatNumber(resolvedGasUnits)} units`
-                  : undefined
-              }
-            />
-          )}
-          {showCombinedEnergy && (
+              ) : undefined
+            }
+            value={gasPrimaryValue}
+            sub={gasSub}
+          />
+          {(isPeriod || showCombinedEnergy) && (
             <StatCard
               label="Total Electricity + Gas"
-              value={`${formatNumber(combinedEnergyKwh)} kWh`}
+              value={
+                showCombinedEnergy
+                  ? `${formatNumber(combinedEnergyKwh)} kWh`
+                  : NA_VALUE
+              }
             />
           )}
         </div>

@@ -1,13 +1,9 @@
 "use client";
 
-import {
-  isMapFilterActive,
-  SummaryBreakdownSection,
-} from "@/components/dashboard/summary-breakdown-section";
+import { SummaryBreakdownSection } from "@/components/dashboard/summary-breakdown-section";
 import type { MapZoneEnergyResult } from "@/lib/resort-map/aggregate-energy";
 import { PeriodContextCards } from "@/components/dashboard/period-context-cards";
 import { PeriodNavigator } from "@/components/dashboard/period-navigator";
-import { PeriodExtremaCards } from "@/components/dashboard/period-extrema-cards";
 import {
   SummaryDownloadBar,
   SummaryPanelTitle,
@@ -37,11 +33,6 @@ export function MonthlySummaryPanel({
   mapZoneSummaries = null,
   mapZoneSummariesLoading = false,
 }: MonthlySummaryPanelProps) {
-  const mapFilterActive = isMapFilterActive(
-    mapZoneSummaries,
-    mapZoneSummariesLoading,
-  );
-
   return (
     <div className="space-y-3">
       <SummaryDownloadBar
@@ -67,6 +58,7 @@ export function MonthlySummaryPanel({
         <CardContent className="min-w-0 space-y-6 pt-4">
         <PeriodContextCards
           periodContext={summary.context}
+          mobileFuels={summary.mobileFuels}
           gasKwh={summary.totals.gasKwh}
           gasUnits={summary.totals.gasUnits}
           electricityKwh={summary.totals.resortElectricityTotal}
@@ -80,16 +72,8 @@ export function MonthlySummaryPanel({
           fullResortValueColumnLabel="Month total kWh / units"
           mapZoneSummaries={mapZoneSummaries}
           mapZoneSummariesLoading={mapZoneSummariesLoading}
+          resortGas={summary.resortGas}
         />
-
-        {!mapFilterActive && (
-          <PeriodExtremaCards
-            highest={summary.highestDay}
-            lowest={summary.lowestDay}
-            highestLabel="Highest day of the month"
-            lowestLabel="Lowest day of the month"
-          />
-        )}
 
         <p className="text-xs text-slate-400">
           Month totals sum daily executive-summary figures. Temperature,

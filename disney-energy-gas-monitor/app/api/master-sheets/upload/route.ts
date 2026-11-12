@@ -32,6 +32,13 @@ import {
   parseSkipGasConversion,
   preflightHccpGasCapacityForConsumption,
 } from "@/lib/upload/hccp-gas-capacity-preflight";
+import {
+  clearGasolineDieselStoreCache,
+  saveGasolineDieselWorkbookUpload,
+} from "@/lib/mobile-fuels/gasoline-diesel-store";
+import { isMobileGasolineDieselUploadFilename } from "@/lib/mobile-fuels/gasoline-diesel-filename";
+import { saveTgmjWorkbookUpload, clearTgmjStoreCache } from "@/lib/monthly-utilities-gas/tgmj-store";
+import { isMonthlyUtilitiesConsumptionFilename } from "@/lib/monthly-utilities-gas/utilities-consumption-filename";
 import { handleRawConversionUpload } from "@/lib/upload/raw-upload-stub";
 import {
   checkMasterSheetUploadToken,
@@ -112,6 +119,65 @@ async function handleUpload(form: FormData) {
       },
       { status: 400 },
     );
+  }
+
+  if (classification.kind === "mobile_fuels") {
+    const gasolineFile = files.find(
+      (f) => f instanceof File && isMobileGasolineDieselUploadFilename(f.name),
+    );
+    const utilitiesFile = files.find(
+      (f) => f instanceof File && isMonthlyUtilitiesConsumptionFilename(f.name),
+    );
+    if (!(gasolineFile instanceof File) && !(utilitiesFile instanceof File)) {
+      return NextResponse.json(
+        { error: "No recognized Mode C workbook found" },
+        { status: 400 },
+      );
+    }
+
+    const saved: string[] = [];
+    const messages: string[] = [];
+
+    try {
+      if (gasolineFile instanceof File) {
+        const store = await saveGasolineDieselWorkbookUpload(
+          Buffer.from(await gasolineFile.arrayBuffer()),
+        );
+        saved.push(gasolineFile.name);
+        messages.push(
+          `Gasoline/diesel: ${Object.keys(store).length} month buckets`,
+        );
+        clearGasolineDieselStoreCache();
+      }
+      if (utilitiesFile instanceof File) {
+        const bundle = await saveTgmjWorkbookUpload(
+          Buffer.from(await utilitiesFile.arrayBuffer()),
+        );
+        saved.push(utilitiesFile.name);
+        messages.push(
+          `Utilities gas (TGMJ): ${Object.keys(bundle.store).length} months`,
+        );
+        clearTgmjStoreCache();
+      }
+      clearDataStoreCache();
+      revalidatePath("/");
+      return NextResponse.json({
+        ok: true,
+        mode: "mobile_fuels",
+        saved,
+        message: `Mode C data loaded. ${messages.join("; ")}.`,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Could not parse Mode C workbook",
+        },
+        { status: 400 },
+      );
+    }
   }
 
   if (classification.kind === "raw_conversion") {

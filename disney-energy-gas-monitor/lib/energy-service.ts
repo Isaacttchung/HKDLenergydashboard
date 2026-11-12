@@ -36,11 +36,15 @@ import {
   resolveComparisonRange,
   resolveDateRange,
 } from "@/lib/time-presets";
+import { getMobileFuelsSummary } from "@/lib/mobile-fuels/gasoline-diesel-query";
+import { getMonthlyResortGasSummary } from "@/lib/monthly-utilities-gas/tgmj-query";
 import type {
   DailyBreakdown,
   EnergyApiResponse,
   EnergyQueryParams,
   MetricView,
+  MobileFuelsSummary,
+  MonthlyResortGasSummary,
   PeriodContextSummary,
   PeriodData,
 } from "@/lib/types";
@@ -51,12 +55,24 @@ async function enrichPeriodSummary<
     to: string;
     totals: DailyBreakdown;
     context?: PeriodContextSummary | null;
+    mobileFuels?: MobileFuelsSummary | null;
+    resortGas?: MonthlyResortGasSummary | null;
   },
->(summary: T): Promise<T> {
+>(
+  summary: T,
+  timePreset: EnergyQueryParams["timePreset"],
+): Promise<T> {
   const context = await getPeriodContextSummary(summary.from, summary.to);
+  const preset = timePreset ?? "ytd";
+  const [mobileFuels, resortGas] = await Promise.all([
+    getMobileFuelsSummary(preset, summary.from, summary.to),
+    getMonthlyResortGasSummary(preset, summary.from, summary.to),
+  ]);
   return {
     ...summary,
     context,
+    mobileFuels,
+    resortGas,
     totals: applyPeriodContextToBreakdown(summary.totals, context),
   };
 }
@@ -164,6 +180,12 @@ async function buildPeriodData(
       }
       result.dailyBreakdown = breakdown;
     }
+    const [mobileFuels, resortGas] = await Promise.all([
+      getMobileFuelsSummary("day", from, to),
+      getMonthlyResortGasSummary("day", from, to),
+    ]);
+    result.mobileFuels = mobileFuels;
+    result.resortGas = resortGas;
   }
 
   if (
@@ -179,7 +201,10 @@ async function buildPeriodData(
         to,
         solarIndex,
       );
-      result.monthlyReportSummary = await enrichPeriodSummary(summary);
+      result.monthlyReportSummary = await enrichPeriodSummary(
+        summary,
+        timePreset,
+      );
     }
     if (timePreset === "ytd") {
       const summary = buildYearlyReportSummary(
@@ -188,7 +213,7 @@ async function buildPeriodData(
         to,
         solarIndex,
       );
-      result.yearlyReportSummary = await enrichPeriodSummary(summary);
+      result.yearlyReportSummary = await enrichPeriodSummary(summary, timePreset);
     }
     if (timePreset === "custom") {
       const summary = buildCustomRangeReportSummary(
@@ -197,7 +222,20 @@ async function buildPeriodData(
         to,
         solarIndex,
       );
-      result.customRangeReportSummary = await enrichPeriodSummary(summary);
+      result.customRangeReportSummary = await enrichPeriodSummary(
+        summary,
+        timePreset,
+      );
+    }
+    if (timePreset === "month") {
+      result.mobileFuels = result.monthlyReportSummary?.mobileFuels ?? null;
+      result.resortGas = result.monthlyReportSummary?.resortGas ?? null;
+    } else if (timePreset === "ytd") {
+      result.mobileFuels = result.yearlyReportSummary?.mobileFuels ?? null;
+      result.resortGas = result.yearlyReportSummary?.resortGas ?? null;
+    } else if (timePreset === "custom") {
+      result.mobileFuels = result.customRangeReportSummary?.mobileFuels ?? null;
+      result.resortGas = result.customRangeReportSummary?.resortGas ?? null;
     }
   }
 

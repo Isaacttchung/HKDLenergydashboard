@@ -13,17 +13,31 @@ export const REQUIRED_RAW_LOGICAL_IDS = EXPECTED_RAW_LOGICAL_IDS;
 
 const RAW_LOGICAL_ID_SET = new Set<string>(EXPECTED_RAW_LOGICAL_IDS);
 
-/** Strip `_YYYYMMDDHHMMSS_<hash>.csv` and normalize to logical id key. */
+/** Strip EMS export suffixes and normalize to logical id key. */
 export function normalizeRawFilenameKey(filename: string): string {
   const base = filename.replace(/^.*[/\\]/, "").replace(/\.csv$/i, "");
-  const withoutTimestamp = base.replace(
-    /_\d{14}_[a-f0-9]{4}$/i,
-    "",
-  );
-  return withoutTimestamp
+  let stem = base.replace(/_\d{14}_[a-f0-9]{4}$/i, "");
+  stem = stem.replace(/_[a-f0-9]{4}$/i, "");
+  stem = stem
     .trim()
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_");
+
+  if (
+    stem === "CCP_HCCP_Daily1" ||
+    stem.startsWith("CCP_HCCP_Daily1_")
+  ) {
+    return "CCP+HCCP_Daily1";
+  }
+
+  if (
+    stem === HCCP_GAS_CAPACITY_LOGICAL_ID ||
+    stem.startsWith(`${HCCP_GAS_CAPACITY_LOGICAL_ID}_`)
+  ) {
+    return HCCP_GAS_CAPACITY_LOGICAL_ID;
+  }
+
+  return stem;
 }
 
 export function resolveRawLogicalId(

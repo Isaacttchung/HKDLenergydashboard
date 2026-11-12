@@ -4,6 +4,8 @@ import {
   isRawCsvFilename,
   resolveRawLogicalId,
 } from "@/lib/raw-data-config";
+import { isMobileGasolineDieselUploadFilename } from "@/lib/mobile-fuels/gasoline-diesel-filename";
+import { isMonthlyUtilitiesConsumptionFilename } from "@/lib/monthly-utilities-gas/utilities-consumption-filename";
 import {
   EXPECTED_MASTER_SHEET_FILES,
   type ExpectedMasterSheetFile,
@@ -19,7 +21,10 @@ export const RAW_CONVERSION_HCCP_GAS_CAPACITY_CSV = "HCCP Gas Capacity.csv";
 export const RAW_CONVERSION_TOTAL_FILES =
   EXPECTED_RAW_LOGICAL_IDS.length + 2;
 
-export type UploadBatchKind = "raw_conversion" | "master_replace";
+export type UploadBatchKind =
+  | "raw_conversion"
+  | "master_replace"
+  | "mobile_fuels";
 
 export interface UploadBatchClassification {
   kind: UploadBatchKind;
@@ -40,14 +45,26 @@ function classifyFiles(filenames: string[]): {
   rawLogicalIds: Set<string>;
   hccpGasCapacityCsvCount: number;
   masterCanonical: Set<ExpectedMasterSheetFile>;
+  mobileGasolineDieselCount: number;
+  mobileUtilitiesConsumptionCount: number;
   unrecognized: string[];
 } {
   const rawLogicalIds = new Set<string>();
   let hccpGasCapacityCsvCount = 0;
   const masterCanonical = new Set<ExpectedMasterSheetFile>();
+  let mobileGasolineDieselCount = 0;
+  let mobileUtilitiesConsumptionCount = 0;
   const unrecognized: string[] = [];
 
   for (const name of filenames) {
+    if (isMobileGasolineDieselUploadFilename(name)) {
+      mobileGasolineDieselCount += 1;
+      continue;
+    }
+    if (isMonthlyUtilitiesConsumptionFilename(name)) {
+      mobileUtilitiesConsumptionCount += 1;
+      continue;
+    }
     if (isRawCsvFilename(name)) {
       if (isHccpGasCapacityCsvFilename(name)) {
         hccpGasCapacityCsvCount += 1;
@@ -76,7 +93,14 @@ function classifyFiles(filenames: string[]): {
     unrecognized.push(name);
   }
 
-  return { rawLogicalIds, hccpGasCapacityCsvCount, masterCanonical, unrecognized };
+  return {
+    rawLogicalIds,
+    hccpGasCapacityCsvCount,
+    masterCanonical,
+    mobileGasolineDieselCount,
+    mobileUtilitiesConsumptionCount,
+    unrecognized,
+  };
 }
 
 /**
@@ -91,8 +115,14 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
     };
   }
 
-  const { rawLogicalIds, hccpGasCapacityCsvCount, masterCanonical, unrecognized } =
-    classifyFiles(filenames);
+  const {
+    rawLogicalIds,
+    hccpGasCapacityCsvCount,
+    masterCanonical,
+    mobileGasolineDieselCount,
+    mobileUtilitiesConsumptionCount,
+    unrecognized,
+  } = classifyFiles(filenames);
 
   if (unrecognized.length > 0) {
     return {
@@ -107,6 +137,41 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
   const otherMasters = [...masterCanonical].filter(
     (m) => m !== RAW_CONVERSION_FEED_IN_MASTER,
   );
+
+  const mobileModeCCount =
+    mobileGasolineDieselCount + mobileUtilitiesConsumptionCount;
+
+  if (mobileModeCCount > 0) {
+    if (rawCount > 0 || hccpGasCapacityCsvCount > 0 || masterCanonical.size > 0) {
+      return {
+        kind: "invalid",
+        error:
+          "Mixed batch: Mode C mobile fuel workbooks cannot be uploaded with Mode A raw CSVs or Mode B master sheets.",
+      };
+    }
+    if (mobileGasolineDieselCount > 1) {
+      return {
+        kind: "invalid",
+        error:
+          "Mode C expects at most one gasoline/diesel workbook per upload.",
+      };
+    }
+    if (mobileUtilitiesConsumptionCount > 1) {
+      return {
+        kind: "invalid",
+        error:
+          "Mode C expects at most one Monthly Utilities Consumption workbook per upload.",
+      };
+    }
+    if (filenames.length !== mobileModeCCount) {
+      return {
+        kind: "invalid",
+        error:
+          "Unrecognized file(s) in Mode C batch. Use only recognized Mode C workbooks.",
+      };
+    }
+    return { kind: "mobile_fuels" };
+  }
 
   const missingRaw = EXPECTED_RAW_LOGICAL_IDS.filter(
     (id) => !rawLogicalIds.has(id),

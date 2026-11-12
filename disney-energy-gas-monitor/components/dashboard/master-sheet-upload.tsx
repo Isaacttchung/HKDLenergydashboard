@@ -571,8 +571,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       >
         <Upload className="h-6 w-6 text-brand-muted" />
         <span className="text-xs font-medium text-slate-700">
-          Option A ({RAW_CONVERSION_TOTAL_FILES} rawdata files) or Option B (4
-          master excels)
+          Option A ({RAW_CONVERSION_TOTAL_FILES} raw files), Option B (4 master
+          excels), or Option C (mobile gasoline/diesel workbook)
         </span>
       </label>
 
@@ -626,6 +626,24 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
                 {name}
               </li>
             ))}
+          </ul>
+        </details>
+
+        <details className="rounded-md border border-brand-border bg-white/80 px-3 py-2.5 text-sm text-slate-600">
+          <summary className="cursor-pointer select-none text-sm font-medium text-slate-700">
+            Option C: Mobile fuels &amp; utilities — 1 or 2 workbooks
+          </summary>
+          <p className="mt-2 text-xs leading-snug text-slate-500">
+            Upload one or both workbooks (no EMS CSVs or master sheets in the same
+            batch). No Edit Excel for these files.
+          </p>
+          <ul className={cn("mt-3", uploadFileListClass)}>
+            <li className={uploadFileNameClass}>
+              …_Mobile_Gasoline_Diesel_data_sent.xlsx
+            </li>
+            <li className={uploadFileNameClass}>
+              …Monthly Utilities Consumption….xlsx
+            </li>
           </ul>
         </details>
       </div>

@@ -21,10 +21,14 @@ export function isExpectedMasterSheetFilename(
 /** Loose match key so uploads with spaces / mixed case still map to canonical names. */
 export function normalizeMasterSheetFilenameKey(filename: string): string {
   const withoutExt = filename.replace(/\.(xlsx|xls)$/i, "").trim();
-  return withoutExt
+  let key = withoutExt
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/_+/g, "_");
+  if (key.startsWith("hkdl_daily_feed-in_tariff_report_")) {
+    key = "hkdl_daily_feed-in_tariff_report";
+  }
+  return key;
 }
 
 /**

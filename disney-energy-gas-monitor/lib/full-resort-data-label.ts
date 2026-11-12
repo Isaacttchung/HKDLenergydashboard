@@ -1,8 +1,6 @@
 import { format, parseISO } from "date-fns";
 import type { TimePreset } from "@/lib/types";
 
-const BASE_LABEL = "Full resort data";
-
 function formatDaySlash(isoDate: string): string {
   return format(parseISO(isoDate), "dd/MM/yyyy");
 }
@@ -34,14 +32,28 @@ function periodSuffix(
   }
 }
 
-/** Table column header: "Full resort data" + period suffix for the active time preset. */
+/** Table category column header in the report summary (full resort, not map filter). */
 export function fullResortDataColumnLabel(
   timePreset: TimePreset,
   from: string,
   to?: string,
 ): string {
-  const suffix = periodSuffix(timePreset, from, to);
-  return suffix ? `${BASE_LABEL} ${suffix}` : BASE_LABEL;
+  switch (timePreset) {
+    case "day":
+      return `Daily full resort kWh data (${formatDaySlash(from)})`;
+    case "month":
+      return `Monthly full resort kWh data (${formatMonthSlash(from)})`;
+    case "ytd":
+      return `Yearly full resort kWh data (${from.slice(0, 4)})`;
+    case "custom": {
+      const end = to ?? from;
+      return `Range full resort kWh data (${formatDaySlash(from)} - ${formatDaySlash(end)})`;
+    }
+    default:
+      return periodSuffix(timePreset, from, to)
+        ? `Full resort kWh data (${periodSuffix(timePreset, from, to)})`
+        : "Full resort kWh data";
+  }
 }
 
 /** Map selection table header: "{zone label} data {period}". */

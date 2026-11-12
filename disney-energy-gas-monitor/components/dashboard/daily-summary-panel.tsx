@@ -11,12 +11,18 @@ import { PeriodContextCards } from "@/components/dashboard/period-context-cards"
 import { PeriodNavigator } from "@/components/dashboard/period-navigator";
 import { Card, CardContent } from "@/components/ui/card";
 import type { DailyContext } from "@/lib/daily-context";
-import type { DailyBreakdown } from "@/lib/types";
+import type {
+  DailyBreakdown,
+  MobileFuelsSummary,
+  MonthlyResortGasSummary,
+} from "@/lib/types";
 
 interface DailySummaryPanelProps {
   date: string;
   context: DailyContext | null;
   breakdown: DailyBreakdown;
+  mobileFuels?: MobileFuelsSummary | null;
+  resortGas?: MonthlyResortGasSummary | null;
   onPreviousDay: () => void;
   onNextDay: () => void;
   canGoPreviousDay?: boolean;
@@ -44,6 +50,8 @@ export function DailySummaryPanel({
   canGoNextDay = true,
   mapZoneSummaries = null,
   mapZoneSummariesLoading = false,
+  mobileFuels = null,
+  resortGas = null,
 }: DailySummaryPanelProps) {
   return (
     <div className="space-y-3">
@@ -70,6 +78,7 @@ export function DailySummaryPanel({
         <CardContent className="min-w-0 space-y-6 pt-4">
         <PeriodContextCards
           dailyContext={context}
+          mobileFuels={mobileFuels}
           gasKwh={breakdown.gasKwh}
           gasUnits={breakdown.gasUnits}
           electricityKwh={breakdown.resortElectricityTotal}
@@ -83,6 +92,7 @@ export function DailySummaryPanel({
           fullResortValueColumnLabel="kWh"
           mapZoneSummaries={mapZoneSummaries}
           mapZoneSummariesLoading={mapZoneSummariesLoading}
+          resortGas={resortGas}
         />
 
         {context?.yoyChangePct !== undefined && (

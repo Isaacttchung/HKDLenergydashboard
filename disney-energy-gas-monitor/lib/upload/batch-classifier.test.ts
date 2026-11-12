@@ -83,4 +83,48 @@ describe("classifyUploadBatch", () => {
       assert.match(result.error, /Incomplete raw|HCCP Gas Capacity/i);
     }
   });
+
+  it("accepts EMS export filename variants for Daily1, gas capacity, and feed-in", () => {
+    const names = [...RAW_SAMPLE_NAMES];
+    names[0] = "CCP_HCCP_Daily1_c1c7.csv";
+    const result = classifyUploadBatch([
+      ...names,
+      "HCCP_Gas_Capacity_dd5f.csv",
+      "HKDL_Daily_Feed-in_Tariff_Report_acc8.xlsx",
+    ]);
+    assert.equal(result.kind, "raw_conversion");
+  });
+
+  it("accepts Mode C mobile gasoline/diesel workbook alone", () => {
+    const result = classifyUploadBatch([
+      "FY20-26_Mobile_Gasoline_Diesel_data_sent.xlsx",
+    ]);
+    assert.equal(result.kind, "mobile_fuels");
+  });
+
+  it("rejects mobile fuels mixed with masters", () => {
+    const result = classifyUploadBatch([
+      "FY20-26_Mobile_Gasoline_Diesel_data_sent.xlsx",
+      EXPECTED_MASTER_SHEET_FILES[0],
+    ]);
+    assert.equal(result.kind, "invalid");
+    if (result.kind === "invalid") {
+      assert.match(result.error, /Mode C|Mixed batch/i);
+    }
+  });
+
+  it("accepts both Mode C workbooks together", () => {
+    const result = classifyUploadBatch([
+      "FY20-26_Mobile_Gasoline_Diesel_data_sent.xlsx",
+      "52. Disney Monthly Utilities Consumption-20260926.xlsx",
+    ]);
+    assert.equal(result.kind, "mobile_fuels");
+  });
+
+  it("accepts utilities consumption workbook alone", () => {
+    const result = classifyUploadBatch([
+      "Disney Monthly Utilities Consumption-20260926.xlsx",
+    ]);
+    assert.equal(result.kind, "mobile_fuels");
+  });
 });

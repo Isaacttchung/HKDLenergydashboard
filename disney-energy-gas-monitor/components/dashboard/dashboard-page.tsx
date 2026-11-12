@@ -571,6 +571,8 @@ export function DashboardPage({
                     date={singleDay}
                     context={dailyContext}
                     breakdown={data.primary.dailyBreakdown}
+                    mobileFuels={data.primary.mobileFuels}
+                    resortGas={data.primary.resortGas}
                     onPreviousDay={goToPreviousDay}
                     onNextDay={goToNextDay}
                     canGoPreviousDay={canShiftDay(
