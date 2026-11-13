@@ -81,6 +81,31 @@ describe("validateRawCsvContent — synthetic violations", () => {
     assert.ok(neg[0].column.includes("MeterA"));
   });
 
+  it("skips NEGATIVE_DELTA and CUMULATIVE_DECREASE on CHHP solar Mercury columns", () => {
+    const pad = ",pad#Real Energy#kWh".repeat(5);
+    const csv = [
+      `Timestamp${pad},Hotel.SS303B_Tx_D2#Real Energy#kWh,Plain.Meter#Real Energy#kWh`,
+      `2026-10-26 00:15:00${",0".repeat(5)},5058248.5,100`,
+      `2026-10-26 00:30:00${",0".repeat(5)},5058000,90`,
+      `2026-10-26 00:45:00${",0".repeat(5)},5057446.5,85`,
+    ].join("\n");
+    const warnings = validateRawCsvContent(csv, {
+      fileLabel: "Mercury_HCCP",
+    });
+    const solarCodes = warnings.filter(
+      (w) =>
+        w.code === "NEGATIVE_DELTA" || w.code === "CUMULATIVE_DECREASE",
+    );
+    assert.equal(
+      solarCodes.filter((w) => w.column.includes("SS303B")).length,
+      0,
+    );
+    assert.ok(
+      solarCodes.some((w) => w.column.includes("Plain")),
+      "non-solar columns still warned",
+    );
+  });
+
   it("flags LOW_DATA_COUNT below threshold", () => {
     const rows = [
       "Timestamp,Site.MeterA#Real Energy#kWh",

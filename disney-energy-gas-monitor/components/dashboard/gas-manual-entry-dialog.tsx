@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { computeHccpOverallOccupancy } from "@/lib/raw-to-master/hccp-gas-manual";
+import { readMasterSheetUploadToken } from "@/lib/upload/upload-token-session";
 import { Loader2 } from "lucide-react";
 import {
   useEffect,
@@ -101,11 +102,11 @@ export function GasManualEntryDialog({
     }
 
     try {
+      const token = (uploadToken || readMasterSheetUploadToken()).trim();
       const headers: HeadersInit = { "Content-Type": "application/json" };
-      if (uploadToken.trim()) {
-        headers["x-upload-token"] = uploadToken.trim();
+      if (token) {
+        headers["x-upload-token"] = token;
       }
-      const token = uploadToken.trim();
       const res = await fetch("/api/master-sheets/gas-manual-fields", {
         method: "POST",
         headers,

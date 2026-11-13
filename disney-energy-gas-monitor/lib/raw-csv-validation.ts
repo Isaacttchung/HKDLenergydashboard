@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { isSolarFeedInLinkedRawColumn } from "@/lib/raw-csv-solar-exemptions";
 
 export type RawCsvWarningCode =
   | "CUMULATIVE_DECREASE"
@@ -90,7 +91,13 @@ export function validateRawCsvContent(
     const hasNumeric = numericByRow.some((v) => v !== null);
     if (!hasNumeric) continue;
 
+    const skipSolarImportWarnings = isSolarFeedInLinkedRawColumn(
+      fileLabel,
+      col,
+    );
+
     for (let r = 0; r < numericByRow.length - 1; r += 1) {
+      if (skipSolarImportWarnings) continue;
       const current = numericByRow[r];
       const next = numericByRow[r + 1];
       if (current === null || next === null) continue;
@@ -109,7 +116,11 @@ export function validateRawCsvContent(
     }
 
     const fl = firstLastNonEmpty(numericByRow);
-    if (fl && fl.last - fl.first < 0) {
+    if (
+      !skipSolarImportWarnings &&
+      fl &&
+      fl.last - fl.first < 0
+    ) {
       warnings.push({
         code: "NEGATIVE_DELTA",
         file: fileLabel,

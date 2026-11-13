@@ -133,7 +133,7 @@ Users do **not** upload the internal formula workbook (`Formula-DailyWeb4.xlsm`)
 | Master workbook | From raw data? | Notes |
 |-----------------|----------------|-------|
 | **HKDL_Top_10.xlsx** (`WebSS_Data`) | Yes | Mappings from RawData spec; outdoor air temperature from **`CCP+HCCP Daily1`** (column BY, daily average → row 301) |
-| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_*** kWh columns; **Park Y** = outdoor temp (Daily1 BY); **Hotel P** / **Park AB** = 30-day formulas; **Park AA** = OPEN/CLOSE from **Z**; **Hotel O** + **Park Z** from gas manual step (occupancy + Atten) |
+| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_*** columns from formula **CHHP** (`power-solar-mappings.ts`: import Δ + feed-in sum); **Park Y** = outdoor temp (Daily1 BY); **Hotel P** / **Park AB** = 30-day formulas; **Park AA** = OPEN/CLOSE from **Z**; **Hotel O** + **Park Z** from gas manual step (occupancy + Atten) |
 | **HKDL Daily Feed-in Tariff Report.xlsx** | Uploaded as input | Required for solar / feed-in calculations; not produced from raws alone |
 | **HCCP_Gas_Consumption_report.xlsx** | Yes (gas mode) | **HCCP Gas Capacity.csv** → Gas Meter Reading columns I/J/K |
 
@@ -232,11 +232,13 @@ Conversion **completes** and the dashboard **updates** even when warnings fire. 
 | **CUMULATIVE_DECREASE** | Cumulative kWh decreased row-to-row (equal is OK) |
 | **NEGATIVE_DELTA** | Daily total (last − first non-empty) is negative |
 
+**CHHP / solar import columns:** For meters mapped in formula **CHHP** with feed-in tariff columns (and Top_10 **RawData** solar rows with feed-in), a falling raw import register is expected when export exceeds load. Those columns are **not** listed under cumulative-decrease or negative-delta warnings (Power_Solar still writes **import Δ + feed-in sum** to the master).
+
 Bad source data (for example known REC glitches) is **not** auto-corrected; fix manually and re-upload.
 
 ### Default kWh rule
 
-For each meter column: **last non-empty cumulative kWh − first non-empty cumulative kWh** for that day, unless a specific mapping uses REC or feed-in formulas (Top_10 / Power_Solar).
+For each meter column: **last non-empty cumulative kWh − first non-empty cumulative kWh** for that day, unless a specific mapping uses REC or feed-in formulas (Top_10 **RawData**; Power_Solar **CHHP** + feed-in tariff report).
 
 ### Code locations (developers)
 

@@ -13,6 +13,10 @@ import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dia
 import type { GasManualEntryRequest } from "@/components/dashboard/gas-manual-entry-dialog";
 import type { MasterSheetUploadMeta } from "@/lib/master-sheet-upload-meta";
 import { releaseStaleModalLocks } from "@/lib/release-stale-modal-locks";
+import {
+  clearMasterSheetUploadToken,
+  persistMasterSheetUploadToken,
+} from "@/lib/upload/upload-token-session";
 import type { RawCsvWarning } from "@/lib/raw-csv-validation";
 import type { DownloadableAfterWarning } from "@/lib/upload/downloadable-after-warnings";
 import { EXPECTED_RAW_LOGICAL_IDS } from "@/lib/expected-raw-logical-ids";
@@ -128,8 +132,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
   const [gasManualEntry, setGasManualEntry] =
     useState<GasManualEntryRequest | null>(null);
   const [gasManualDialogOpen, setGasManualDialogOpen] = useState(false);
+  const [gasManualSessionToken, setGasManualSessionToken] = useState("");
   const pendingGasManualRef = useRef<GasManualEntryRequest | null>(null);
-  const gasManualUploadTokenRef = useRef<string>("");
+  const lastUploadAuthTokenRef = useRef("");
 
   const loadStatus = useCallback(() => {
     fetch("/api/master-sheets/upload")
@@ -153,19 +158,21 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
 
   const clearUploadActionToken = useCallback(() => {
     uploadActionTokenRef.current = null;
-    gasManualUploadTokenRef.current = "";
+    lastUploadAuthTokenRef.current = "";
+    setGasManualSessionToken("");
+    clearMasterSheetUploadToken();
     setUploadToken("");
   }, []);
 
-  const rememberUploadTokenForGasManual = useCallback(() => {
-    const token =
-      uploadActionTokenRef.current?.trim() || uploadToken.trim();
-    if (token) {
-      gasManualUploadTokenRef.current = token;
-      setUploadToken(token);
-      uploadActionTokenRef.current = token;
-    }
-  }, [uploadToken]);
+  const pinUploadTokenForFollowUpSteps = useCallback((token: string) => {
+    const trimmed = token.trim();
+    if (!trimmed) return;
+    lastUploadAuthTokenRef.current = trimmed;
+    uploadActionTokenRef.current = trimmed;
+    setUploadToken(trimmed);
+    persistMasterSheetUploadToken(trimmed);
+    setGasManualSessionToken(trimmed);
+  }, []);
 
   const clearEditExcelToken = useCallback(() => {
     setEditExcelToken("");
@@ -245,8 +252,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       uploadActionTokenRef.current?.trim() ??
       uploadToken.trim();
     if (token) {
-      uploadActionTokenRef.current = token;
-      setUploadToken(token);
+      pinUploadTokenForFollowUpSteps(token);
       form.append("uploadToken", token);
     }
     if (replaceExisting) {
@@ -383,7 +389,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         setDownloadableAfterWarnings([]);
         setWarningsDialogOpen(false);
         if (gasEntry) {
-          rememberUploadTokenForGasManual();
+          pinUploadTokenForFollowUpSteps(
+            lastUploadAuthTokenRef.current || token || "",
+          );
           setGasManualEntry(gasEntry);
           setGasManualDialogOpen(true);
         } else {
@@ -906,7 +914,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
           setWarningsDialogOpen(false);
           const pending = pendingGasManualRef.current;
           if (pending) {
-            rememberUploadTokenForGasManual();
+            pinUploadTokenForFollowUpSteps(
+              lastUploadAuthTokenRef.current || uploadToken || "",
+            );
             setGasManualEntry(pending);
             setGasManualDialogOpen(true);
             pendingGasManualRef.current = null;
@@ -918,7 +928,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
 
       <GasManualEntryDialog
         request={gasManualEntry}
-        uploadToken={gasManualUploadTokenRef.current || uploadToken}
+        uploadToken={gasManualSessionToken || uploadToken}
         open={gasManualDialogOpen}
         onCompleted={(msg) => {
           setMessage(msg);

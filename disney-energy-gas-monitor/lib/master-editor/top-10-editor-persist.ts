@@ -9,6 +9,7 @@ import {
   type Top10RawDataRow,
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
 import { WEBSS_SHEET_NAME } from "@/lib/raw-to-master/top-10-webss";
+import { clearSolarFeedInExemptionCache } from "@/lib/raw-csv-solar-exemptions";
 import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
 import { backupFilesForEdit } from "@/lib/master-editor/backup";
 
@@ -63,5 +64,6 @@ export async function persistTop10Edit(
   await writeFile(masterPath, out);
   await writeFile(overridePath, JSON.stringify(mappingRows, null, 2), "utf-8");
   clearTop10RawDataRowsCache();
+  clearSolarFeedInExemptionCache();
   return backupDir;
 }
