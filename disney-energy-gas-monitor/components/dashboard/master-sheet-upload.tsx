@@ -353,6 +353,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
           latestDate: (json.latestDate as string | null | undefined) ?? null,
           earliestDate: (json.earliestDate as string | null | undefined) ?? null,
         });
+      } else if (json.mode === "mobile_fuels") {
+        onUploadSuccess?.({ latestDate: null, earliestDate: null });
       }
     } catch {
       setError("Upload failed — check network and try again");
