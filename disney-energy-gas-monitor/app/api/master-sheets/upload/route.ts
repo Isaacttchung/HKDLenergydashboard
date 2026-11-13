@@ -38,6 +38,11 @@ import {
 } from "@/lib/mobile-fuels/gasoline-diesel-store";
 import { isMobileGasolineDieselUploadFilename } from "@/lib/mobile-fuels/gasoline-diesel-filename";
 import { saveTgmjWorkbookUpload, clearTgmjStoreCache } from "@/lib/monthly-utilities-gas/tgmj-store";
+import { MODE_C_SOFT_WARNING_CODE } from "@/lib/upload/mode-c-upload-types";
+import {
+  checkModeCUploadSoftWarnings,
+  parseConfirmModeCSoftWarnings,
+} from "@/lib/upload/mode-c-upload-guard";
 import { isMonthlyUtilitiesConsumptionFilename } from "@/lib/monthly-utilities-gas/utilities-consumption-filename";
 import { handleRawConversionUpload } from "@/lib/upload/raw-upload-stub";
 import {
@@ -104,6 +109,7 @@ async function handleUpload(form: FormData) {
   const files: File[] = entries.filter((e): e is File => e instanceof File);
   const replaceExisting = parseReplaceExisting(form);
   const confirmOutOfOrder = parseConfirmOutOfOrderUpload(form);
+  const confirmModeCSoftWarnings = parseConfirmModeCSoftWarnings(form);
   const classification = classifyUploadBatch(files.map((f) => f.name));
 
   if (classification.kind === "invalid") {
@@ -139,20 +145,47 @@ async function handleUpload(form: FormData) {
     const messages: string[] = [];
 
     try {
-      if (gasolineFile instanceof File) {
-        const store = await saveGasolineDieselWorkbookUpload(
-          Buffer.from(await gasolineFile.arrayBuffer()),
+      const gasolineBuffer =
+        gasolineFile instanceof File
+          ? Buffer.from(await gasolineFile.arrayBuffer())
+          : null;
+      const utilitiesBuffer =
+        utilitiesFile instanceof File
+          ? Buffer.from(await utilitiesFile.arrayBuffer())
+          : null;
+
+      const softWarning = await checkModeCUploadSoftWarnings({
+        gasolineBuffer,
+        gasolineFilename: gasolineFile instanceof File ? gasolineFile.name : null,
+        utilitiesBuffer,
+        utilitiesFilename:
+          utilitiesFile instanceof File ? utilitiesFile.name : null,
+        confirmModeCSoftWarnings,
+      });
+      if (softWarning) {
+        return NextResponse.json(
+          {
+            error: "Mode C upload needs confirmation",
+            code: MODE_C_SOFT_WARNING_CODE,
+            modeCSoftWarning: true,
+            unchangedFileLabels: softWarning.unchangedFileLabels,
+            outdated: softWarning.outdated,
+            message: softWarning.message,
+          },
+          { status: 409 },
         );
+      }
+
+      if (gasolineFile instanceof File && gasolineBuffer) {
+        const store = await saveGasolineDieselWorkbookUpload(gasolineBuffer);
         saved.push(gasolineFile.name);
         messages.push(
           `Gasoline/diesel: ${Object.keys(store).length} month buckets`,
         );
         clearGasolineDieselStoreCache();
       }
-      if (utilitiesFile instanceof File) {
-        const bundle = await saveTgmjWorkbookUpload(
-          Buffer.from(await utilitiesFile.arrayBuffer()),
-        );
+      if (utilitiesFile instanceof File && utilitiesBuffer) {
+        const bundle = await saveTgmjWorkbookUpload(utilitiesBuffer);
         saved.push(utilitiesFile.name);
         messages.push(
           `Utilities gas (TGMJ): ${Object.keys(bundle.store).length} months`,

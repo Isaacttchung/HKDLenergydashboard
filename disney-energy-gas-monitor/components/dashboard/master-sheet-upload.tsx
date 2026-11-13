@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, Upload } from "lucide-react";
 import { DuplicateDateDialog } from "@/components/dashboard/duplicate-date-dialog";
+import { ModeCUploadWarningDialog } from "@/components/dashboard/mode-c-upload-warning-dialog";
 import { OutOfOrderUploadDialog } from "@/components/dashboard/out-of-order-upload-dialog";
+import type { ModeCOutdatedWarning } from "@/lib/upload/mode-c-upload-types";
 import { HccpGasCapacityPreflightDialog } from "@/components/dashboard/hccp-gas-capacity-preflight-dialog";
 import { GasManualEntryDialog } from "@/components/dashboard/gas-manual-entry-dialog";
 import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dialog";
@@ -101,6 +103,15 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     string[]
   >([]);
   const [confirmingGasPreflight, setConfirmingGasPreflight] = useState(false);
+  const [modeCWarningOpen, setModeCWarningOpen] = useState(false);
+  const [modeCWarningMessage, setModeCWarningMessage] = useState<string | null>(
+    null,
+  );
+  const [modeCUnchangedLabels, setModeCUnchangedLabels] = useState<string[]>(
+    [],
+  );
+  const [modeCOutdated, setModeCOutdated] = useState<ModeCOutdatedWarning[]>([]);
+  const [confirmingModeCWarning, setConfirmingModeCWarning] = useState(false);
   const hccpGasSupplementRef = useRef<File[]>([]);
   const hccpGasSupplementInputRef = useRef<HTMLInputElement>(null);
   const [excelPickerOpen, setExcelPickerOpen] = useState(false);
@@ -186,6 +197,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     options?: {
       replaceExisting?: boolean;
       confirmOutOfOrder?: boolean;
+      confirmModeCSoftWarnings?: boolean;
       skipGasConversion?: boolean;
     },
     tokenOverride?: string,
@@ -195,11 +207,14 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
 
     const replaceExisting = options?.replaceExisting ?? false;
     const confirmOutOfOrder = options?.confirmOutOfOrder ?? false;
+    const confirmModeCSoftWarnings = options?.confirmModeCSoftWarnings ?? false;
     const skipGasConversion = options?.skipGasConversion ?? false;
     if (replaceExisting) {
       setReplacingDuplicate(true);
     } else if (confirmOutOfOrder) {
       setConfirmingOutOfOrder(true);
+    } else if (confirmModeCSoftWarnings) {
+      setConfirmingModeCWarning(true);
     } else if (skipGasConversion) {
       setConfirmingGasPreflight(true);
     } else {
@@ -226,6 +241,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     }
     if (confirmOutOfOrder) {
       form.append("confirmOutOfOrder", "true");
+    }
+    if (confirmModeCSoftWarnings) {
+      form.append("confirmModeCSoftWarnings", "true");
     }
     for (const supplement of hccpGasSupplementRef.current) {
       form.append("hccpGasCapacitySupplement", supplement);
@@ -266,6 +284,17 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         return;
       }
 
+      if (res.status === 409 && json.modeCSoftWarning) {
+        pendingUploadRef.current = files;
+        setModeCWarningMessage((json.message as string | undefined) ?? null);
+        setModeCUnchangedLabels(
+          (json.unchangedFileLabels as string[] | undefined) ?? [],
+        );
+        setModeCOutdated((json.outdated as ModeCOutdatedWarning[] | undefined) ?? []);
+        setModeCWarningOpen(true);
+        return;
+      }
+
       if (res.status === 409 && json.duplicateDate) {
         pendingUploadRef.current = files;
         setDuplicateDate(json.duplicateDate as string);
@@ -302,6 +331,10 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       setGasPreflightOpen(false);
       setGasPreflightMessage(null);
       setGasPreflightMissingDates([]);
+      setModeCWarningOpen(false);
+      setModeCWarningMessage(null);
+      setModeCUnchangedLabels([]);
+      setModeCOutdated([]);
 
       const saved = (json.saved as string[]).join(", ");
       setMessage(
@@ -354,7 +387,11 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
           earliestDate: (json.earliestDate as string | null | undefined) ?? null,
         });
       } else if (json.mode === "mobile_fuels") {
-        onUploadSuccess?.({ latestDate: null, earliestDate: null });
+        onUploadSuccess?.({
+          latestDate: null,
+          earliestDate: null,
+          skipServerRefresh: true,
+        });
       }
     } catch {
       setError("Upload failed — check network and try again");
@@ -363,6 +400,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       setReplacingDuplicate(false);
       setConfirmingOutOfOrder(false);
       setConfirmingGasPreflight(false);
+      setConfirmingModeCWarning(false);
     }
   };
 
@@ -398,6 +436,24 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     setOutOfOrderIncoming(null);
     setOutOfOrderLatest(null);
     setOutOfOrderMessage(null);
+    clearUploadActionToken();
+  };
+
+  const handleModeCWarningContinue = () => {
+    const pending = pendingUploadRef.current;
+    if (!pending?.length) {
+      setModeCWarningOpen(false);
+      return;
+    }
+    void uploadFiles(pending, { confirmModeCSoftWarnings: true });
+  };
+
+  const handleModeCWarningCancel = () => {
+    pendingUploadRef.current = null;
+    setModeCWarningOpen(false);
+    setModeCWarningMessage(null);
+    setModeCUnchangedLabels([]);
+    setModeCOutdated([]);
     clearUploadActionToken();
   };
 
@@ -797,6 +853,16 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         confirming={confirmingOutOfOrder}
         onContinue={handleOutOfOrderContinue}
         onCancel={handleOutOfOrderCancel}
+      />
+
+      <ModeCUploadWarningDialog
+        message={modeCWarningMessage}
+        unchangedFileLabels={modeCUnchangedLabels}
+        outdated={modeCOutdated}
+        open={modeCWarningOpen}
+        confirming={confirmingModeCWarning}
+        onContinue={handleModeCWarningContinue}
+        onCancel={handleModeCWarningCancel}
       />
 
       <HccpGasCapacityPreflightDialog

@@ -43,7 +43,7 @@ export function CalendarMonthCaption({
       )}
       {...rest}
     >
-      <div className="flex min-w-0 flex-1 items-center justify-start overflow-hidden">
+      <div className="flex min-w-0 flex-1 items-center justify-start overflow-visible">
         {children}
       </div>
       <div className="flex shrink-0 items-center gap-1">

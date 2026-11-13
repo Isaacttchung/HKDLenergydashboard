@@ -1,0 +1,13 @@
+diff --git a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+index 92a7939..2447530 100644
+--- a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+@@ -353,6 +353,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+           latestDate: (json.latestDate as string | null | undefined) ?? null,
+           earliestDate: (json.earliestDate as string | null | undefined) ?? null,
+         });
++      } else if (json.mode === "mobile_fuels") {
++        onUploadSuccess?.({ latestDate: null, earliestDate: null });
+       }
+     } catch {
+       setError("Upload failed — check network and try again");

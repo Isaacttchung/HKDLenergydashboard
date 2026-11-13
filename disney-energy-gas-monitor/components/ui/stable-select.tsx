@@ -25,6 +25,8 @@ interface StableSelectProps {
   "aria-label"?: string;
   triggerClassName?: string;
   contentClassName?: string;
+  /** When false, list is wide enough for full labels (calendar month/year). */
+  matchTriggerWidth?: boolean;
 }
 
 /** Select look-alike using Popover (modal=false) — no react-remove-scroll layout shift. */
@@ -38,6 +40,7 @@ export function StableSelect({
   "aria-label": ariaLabel,
   triggerClassName,
   contentClassName,
+  matchTriggerWidth = true,
 }: StableSelectProps) {
   const [open, setOpen] = useState(false);
   const listboxId = useId();
@@ -72,11 +75,18 @@ export function StableSelect({
         align="start"
         sideOffset={4}
         className={cn(
-          "z-[70] max-h-96 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-slate-950 shadow-md",
+          "z-[70] max-h-96 overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-slate-950 shadow-md",
+          matchTriggerWidth
+            ? "w-[var(--radix-popover-trigger-width)]"
+            : "w-auto min-w-[var(--radix-popover-trigger-width)]",
           contentClassName,
         )}
       >
-        <ul id={listboxId} role="listbox" className="max-h-80 overflow-y-auto">
+        <ul
+          id={listboxId}
+          role="listbox"
+          className="max-h-[min(18rem,55vh)] overflow-y-auto overscroll-contain"
+        >
           {options.map((option) => {
             const isSelected = value === option.value;
             return (
@@ -99,7 +109,14 @@ export function StableSelect({
                 <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                   {isSelected ? <Check className="h-4 w-4" /> : null}
                 </span>
-                <span className="truncate text-left">{option.label}</span>
+                <span
+                  className={cn(
+                    "text-left",
+                    matchTriggerWidth ? "truncate" : "whitespace-nowrap",
+                  )}
+                >
+                  {option.label}
+                </span>
               </button>
             );
           })}

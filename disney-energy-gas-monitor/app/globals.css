@@ -129,7 +129,7 @@ g.resort-map-region.resort-map-selected tspan {
   flex-shrink: 0;
   font-size: inherit;
   font-weight: inherit;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .custom-range-calendar .rdp-month_grid {
@@ -144,6 +144,7 @@ g.resort-map-region.resort-map-selected tspan {
 
 .custom-range-calendar .rdp-dropdowns {
   max-width: 100%;
+  overflow: visible;
 }
 
 .custom-range-calendar .rdp-button_previous,

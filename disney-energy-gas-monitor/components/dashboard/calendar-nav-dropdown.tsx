@@ -40,13 +40,18 @@ export function CalendarNavDropdown({
           target: { value: next },
         } as ChangeEvent<HTMLSelectElement>);
       }}
+      matchTriggerWidth={false}
       triggerClassName={cn(
         "h-8 border-brand-border px-2 text-xs font-medium text-brand-foreground shadow-sm",
         "focus-visible:border-brand focus-visible:ring-0",
-        isYearDropdown ? "w-[4.85rem]" : "w-[5.65rem]",
+        isYearDropdown ? "w-[4.75rem]" : "w-[7.25rem]",
         className,
       )}
-      contentClassName="z-[100] max-h-56 border-brand-border text-xs [&_button]:text-xs [&_button]:focus:bg-brand-light [&_button]:focus:text-brand-foreground"
+      contentClassName={cn(
+        "z-[110] border-brand-border text-xs",
+        isYearDropdown ? "min-w-[5.5rem]" : "min-w-[10.5rem]",
+        "[&_button]:text-xs [&_button]:focus:bg-brand-light [&_button]:focus:text-brand-foreground",
+      )}
     />
   );
 }

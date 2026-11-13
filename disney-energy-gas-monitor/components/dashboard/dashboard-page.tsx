@@ -329,7 +329,9 @@ export function DashboardPage({
         }
       }
 
-      router.refresh();
+      if (!meta.skipServerRefresh) {
+        router.refresh();
+      }
     },
     [
       dataMaxDate,
