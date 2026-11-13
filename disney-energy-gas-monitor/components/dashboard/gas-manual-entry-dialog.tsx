@@ -105,12 +105,14 @@ export function GasManualEntryDialog({
       if (uploadToken.trim()) {
         headers["x-upload-token"] = uploadToken.trim();
       }
+      const token = uploadToken.trim();
       const res = await fetch("/api/master-sheets/gas-manual-fields", {
         method: "POST",
         headers,
         body: JSON.stringify({
           consumptionDate: request.consumptionDate,
           fields,
+          ...(token ? { uploadToken: token } : {}),
         }),
       });
       const json = await res.json();

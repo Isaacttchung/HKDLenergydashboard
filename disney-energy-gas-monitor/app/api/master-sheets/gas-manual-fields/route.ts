@@ -2,10 +2,8 @@ import path from "path";
 import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { clearDataStoreCache } from "@/lib/datastore/master-sheet-store";
-import {
-  getUploadTokenFromEnv,
-  MASTER_SHEETS_DIR,
-} from "@/lib/master-sheets-config";
+import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
+import { checkMasterSheetUploadToken } from "@/lib/upload/upload-token-auth";
 import {
   applyHccpGasManualFields,
   HCCP_GAS_MASTER_FILENAME,
@@ -15,19 +13,7 @@ import { saveMasterSnapshotForDate } from "@/lib/upload/date-snapshot-store";
 
 export const runtime = "nodejs";
 
-function unauthorized() {
-  return NextResponse.json({ error: "Invalid upload token" }, { status: 401 });
-}
-
 export async function POST(request: NextRequest) {
-  const requiredToken = getUploadTokenFromEnv();
-  if (requiredToken) {
-    const headerToken = request.headers.get("x-upload-token")?.trim();
-    if (headerToken !== requiredToken) {
-      return unauthorized();
-    }
-  }
-
   let body: unknown;
   try {
     body = await request.json();
@@ -38,6 +24,12 @@ export async function POST(request: NextRequest) {
   if (body === null || typeof body !== "object") {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
+
+  const jsonToken = String(
+    (body as Record<string, unknown>).uploadToken ?? "",
+  ).trim();
+  const authFail = checkMasterSheetUploadToken(request, { jsonToken });
+  if (authFail) return authFail;
 
   const consumptionDate = String(
     (body as Record<string, unknown>).consumptionDate ?? "",

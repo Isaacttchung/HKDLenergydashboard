@@ -1,0 +1,87 @@
+diff --git a/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts b/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts
+index 3bffb24..1ddf9cd 100644
+--- a/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts
++++ b/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts
+@@ -201,7 +201,7 @@ async function handleUpload(form: FormData) {
+         );
+         clearTgmjStoreCache();
+       }
+-      clearDataStoreCache();
++      // Mode C only updates fuel JSON — do not clear master workbook cache (30s+ reload).
+       revalidatePath("/");
+       return NextResponse.json({
+         ok: true,
+diff --git a/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.test.ts b/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.test.ts
+index 576f9c9..f122049 100644
+--- a/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.test.ts
++++ b/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.test.ts
+@@ -1,7 +1,30 @@
+ import assert from "node:assert/strict";
+ import { describe, it } from "node:test";
++import type { EnergyRecord } from "@/lib/types";
++import { hasDailyReportData } from "@/lib/reporting-date";
+ import { parseReplaceExisting } from "./duplicate-date-guard";
+ 
++/** Mirrors duplicate guard: only block when park kWh exists for the day (same as latest-date rule). */
++function wouldDuplicate(records: EnergyRecord[], incomingDate: string): boolean {
++  return hasDailyReportData(records, incomingDate);
++}
++
++describe("duplicate date vs dashboard latest", () => {
++  it("does not treat Top 10-only dates as duplicates", () => {
++    const records: EnergyRecord[] = [
++      {
++        date: "2026-11-10",
++        sourceId: "park",
++        energyType: "electricity",
++        valueKwh: 100,
++        costHkd: null,
++      },
++    ];
++    assert.equal(wouldDuplicate(records, "2026-11-11"), false);
++    assert.equal(wouldDuplicate(records, "2026-11-10"), true);
++  });
++});
++
+ describe("parseReplaceExisting", () => {
+   it("reads form flag", () => {
+     const form = new FormData();
+diff --git a/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.ts b/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.ts
+index 97d22aa..3dabf63 100644
+--- a/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.ts
++++ b/disney-energy-gas-monitor/lib/upload/duplicate-date-guard.ts
+@@ -1,4 +1,5 @@
+ import { getDataStore } from "@/lib/datastore/master-sheet-store";
++import { hasDailyReportData } from "@/lib/reporting-date";
+ 
+ export const DUPLICATE_DATE_MESSAGE =
+   "The data you are uploading is already on the dashboard/mastersheets. Replace or cancel?";
+@@ -23,21 +24,13 @@ export async function checkDuplicateUploadDate(options: {
+   if (!incomingDate || replaceExisting) return null;
+ 
+   const store = getDataStore();
+-  const contexts = await store.getDailyContexts();
+-  if (contexts[incomingDate]) {
+-    return {
+-      duplicateDate: incomingDate,
+-      message: DUPLICATE_DATE_MESSAGE,
+-    };
++  const records = await store.getRecords();
++  if (!hasDailyReportData(records, incomingDate)) {
++    return null;
+   }
+ 
+-  const top10 = await store.getTop10Data();
+-  if (top10?.dates.includes(incomingDate)) {
+-    return {
+-      duplicateDate: incomingDate,
+-      message: DUPLICATE_DATE_MESSAGE,
+-    };
+-  }
+-
+-  return null;
++  return {
++    duplicateDate: incomingDate,
++    message: DUPLICATE_DATE_MESSAGE,
++  };
+ }

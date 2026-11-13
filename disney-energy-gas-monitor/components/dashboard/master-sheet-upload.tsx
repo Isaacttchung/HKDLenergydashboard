@@ -129,6 +129,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
     useState<GasManualEntryRequest | null>(null);
   const [gasManualDialogOpen, setGasManualDialogOpen] = useState(false);
   const pendingGasManualRef = useRef<GasManualEntryRequest | null>(null);
+  const gasManualUploadTokenRef = useRef<string>("");
 
   const loadStatus = useCallback(() => {
     fetch("/api/master-sheets/upload")
@@ -152,8 +153,19 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
 
   const clearUploadActionToken = useCallback(() => {
     uploadActionTokenRef.current = null;
+    gasManualUploadTokenRef.current = "";
     setUploadToken("");
   }, []);
+
+  const rememberUploadTokenForGasManual = useCallback(() => {
+    const token =
+      uploadActionTokenRef.current?.trim() || uploadToken.trim();
+    if (token) {
+      gasManualUploadTokenRef.current = token;
+      setUploadToken(token);
+      uploadActionTokenRef.current = token;
+    }
+  }, [uploadToken]);
 
   const clearEditExcelToken = useCallback(() => {
     setEditExcelToken("");
@@ -371,6 +383,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         setDownloadableAfterWarnings([]);
         setWarningsDialogOpen(false);
         if (gasEntry) {
+          rememberUploadTokenForGasManual();
           setGasManualEntry(gasEntry);
           setGasManualDialogOpen(true);
         } else {
@@ -591,7 +604,6 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
               pendingPickAwaitingAuthRef.current = files;
             } else {
               void uploadFiles(picked, undefined, actionToken ?? undefined);
-              uploadActionTokenRef.current = null;
               if (passwordDialogOpen) {
                 setPasswordDialogOpen(false);
                 passwordPurposeRef.current = null;
@@ -894,6 +906,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
           setWarningsDialogOpen(false);
           const pending = pendingGasManualRef.current;
           if (pending) {
+            rememberUploadTokenForGasManual();
             setGasManualEntry(pending);
             setGasManualDialogOpen(true);
             pendingGasManualRef.current = null;
@@ -905,7 +918,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
 
       <GasManualEntryDialog
         request={gasManualEntry}
-        uploadToken={uploadToken}
+        uploadToken={gasManualUploadTokenRef.current || uploadToken}
         open={gasManualDialogOpen}
         onCompleted={(msg) => {
           setMessage(msg);
