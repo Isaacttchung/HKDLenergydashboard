@@ -1,4 +1,5 @@
 import { getDataStore } from "@/lib/datastore/master-sheet-store";
+import { hasDailyReportData } from "@/lib/reporting-date";
 
 export const DUPLICATE_DATE_MESSAGE =
   "The data you are uploading is already on the dashboard/mastersheets. Replace or cancel?";
@@ -23,21 +24,13 @@ export async function checkDuplicateUploadDate(options: {
   if (!incomingDate || replaceExisting) return null;
 
   const store = getDataStore();
-  const contexts = await store.getDailyContexts();
-  if (contexts[incomingDate]) {
-    return {
-      duplicateDate: incomingDate,
-      message: DUPLICATE_DATE_MESSAGE,
-    };
+  const records = await store.getRecords();
+  if (!hasDailyReportData(records, incomingDate)) {
+    return null;
   }
 
-  const top10 = await store.getTop10Data();
-  if (top10?.dates.includes(incomingDate)) {
-    return {
-      duplicateDate: incomingDate,
-      message: DUPLICATE_DATE_MESSAGE,
-    };
-  }
-
-  return null;
+  return {
+    duplicateDate: incomingDate,
+    message: DUPLICATE_DATE_MESSAGE,
+  };
 }

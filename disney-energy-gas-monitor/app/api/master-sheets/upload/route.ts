@@ -201,7 +201,7 @@ async function handleUpload(form: FormData) {
         );
         clearTgmjStoreCache();
       }
-      clearDataStoreCache();
+      // Mode C only updates fuel JSON — do not clear master workbook cache (30s+ reload).
       revalidatePath("/");
       return NextResponse.json({
         ok: true,

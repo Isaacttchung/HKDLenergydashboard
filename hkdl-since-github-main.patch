@@ -1,0 +1,411 @@
+diff --git a/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts b/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts
+index d93cffa..3bffb24 100644
+--- a/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts
++++ b/disney-energy-gas-monitor/app/api/master-sheets/upload/route.ts
+@@ -113,8 +113,15 @@ async function handleUpload(form: FormData) {
+   const classification = classifyUploadBatch(files.map((f) => f.name));
+ 
+   if (classification.kind === "invalid") {
+-    const { error, missing, uploaded, requiredCount, extraMasters } =
+-      classification;
++    const {
++      error,
++      missing,
++      uploaded,
++      requiredCount,
++      extraMasters,
++      unrecognized,
++      ignoredOptional,
++    } = classification;
+     return NextResponse.json(
+       {
+         error,
+@@ -122,6 +129,8 @@ async function handleUpload(form: FormData) {
+         ...(uploaded ? { uploaded } : {}),
+         ...(requiredCount !== undefined ? { requiredCount } : {}),
+         ...(extraMasters ? { extraMasters } : {}),
++        ...(unrecognized?.length ? { unrecognized } : {}),
++        ...(ignoredOptional?.length ? { ignoredOptional } : {}),
+       },
+       { status: 400 },
+     );
+diff --git a/disney-energy-gas-monitor/components/dashboard/dashboard-page.tsx b/disney-energy-gas-monitor/components/dashboard/dashboard-page.tsx
+index b7506aa..7ca6c20 100644
+--- a/disney-energy-gas-monitor/components/dashboard/dashboard-page.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/dashboard-page.tsx
+@@ -299,6 +299,11 @@ export function DashboardPage({
+ 
+   const handleMasterSheetUploaded = useCallback(
+     (meta: MasterSheetUploadMeta) => {
++      if (meta.skipServerRefresh) {
++        setDataRefreshKey((key) => key + 1);
++        return;
++      }
++
+       const previousMax = dataMaxDate;
+       const nextMax = meta.latestDate
+         ? capSelectableMaxDate(meta.latestDate)
+diff --git a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+index 291def9..321bc12 100644
+--- a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+@@ -12,6 +12,7 @@ import { GasManualEntryDialog } from "@/components/dashboard/gas-manual-entry-di
+ import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dialog";
+ import type { GasManualEntryRequest } from "@/components/dashboard/gas-manual-entry-dialog";
+ import type { MasterSheetUploadMeta } from "@/lib/master-sheet-upload-meta";
++import { releaseStaleModalLocks } from "@/lib/release-stale-modal-locks";
+ import type { RawCsvWarning } from "@/lib/raw-csv-validation";
+ import type { DownloadableAfterWarning } from "@/lib/upload/downloadable-after-warnings";
+ import { EXPECTED_RAW_LOGICAL_IDS } from "@/lib/expected-raw-logical-ids";
+@@ -307,7 +308,11 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+         setDuplicateDateOpen(false);
+         clearUploadActionToken();
+         setError(json.error ?? "Upload failed");
+-        if (json.missing?.length) {
++        if (json.unrecognized?.length) {
++          setError(
++            `${json.error ?? "Upload failed"} — unrecognized: ${(json.unrecognized as string[]).join(", ")}`,
++          );
++        } else if (json.missing?.length) {
+           setError(
+             `${json.error ?? "Upload failed"} — missing: ${(json.missing as string[]).join(", ")}`,
+           );
+@@ -336,6 +341,11 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+       setModeCUnchangedLabels([]);
+       setModeCOutdated([]);
+ 
++      releaseStaleModalLocks();
++      setPasswordDialogOpen(false);
++      setPasswordPurpose(null);
++      passwordPurposeRef.current = null;
++
+       const saved = (json.saved as string[]).join(", ");
+       setMessage(
+         (json.message as string | undefined) ??
+diff --git a/disney-energy-gas-monitor/components/dashboard/mode-c-upload-warning-dialog.tsx b/disney-energy-gas-monitor/components/dashboard/mode-c-upload-warning-dialog.tsx
+index 40da6d3..75bfb6f 100644
+--- a/disney-energy-gas-monitor/components/dashboard/mode-c-upload-warning-dialog.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/mode-c-upload-warning-dialog.tsx
+@@ -1,11 +1,11 @@
+ "use client";
+ 
++import { ModalOverlay } from "@/components/dashboard/modal-overlay";
+ import { Button } from "@/components/ui/button";
+ import {
+   formatYearMonthLabel,
+   type ModeCOutdatedWarning,
+ } from "@/lib/upload/mode-c-upload-types";
+-import { useEffect, useRef } from "react";
+ 
+ interface ModeCUploadWarningDialogProps {
+   message: string | null;
+@@ -26,29 +26,23 @@ export function ModeCUploadWarningDialog({
+   onContinue,
+   onCancel,
+ }: ModeCUploadWarningDialogProps) {
+-  const dialogRef = useRef<HTMLDialogElement>(null);
+   const hasContent = unchangedFileLabels.length > 0 || outdated.length > 0;
+-
+-  useEffect(() => {
+-    const el = dialogRef.current;
+-    if (!el) return;
+-    if (open && hasContent) {
+-      if (!el.open) el.showModal();
+-    } else if (el.open) {
+-      el.close();
+-    }
+-  }, [open, hasContent]);
+-
+-  if (!hasContent) return null;
++  if (!open || !hasContent) return null;
+ 
+   return (
+-    <dialog
+-      ref={dialogRef}
+-      className="fixed left-1/2 top-1/2 z-[60] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-amber-200 bg-white p-0 shadow-xl backdrop:bg-black/40 open:block"
++    <ModalOverlay
++      open={open}
+       onClose={onCancel}
++      backdropLabel="Cancel Mode C upload"
++      overlayClassName="z-[60]"
++      panelClassName="w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-amber-200 p-0"
++      aria-labelledby="mode-c-upload-warning-title"
+     >
+       <div className="border-b border-amber-100 bg-amber-50/80 px-4 py-3">
+-        <h2 className="text-sm font-semibold text-slate-900">
++        <h2
++          id="mode-c-upload-warning-title"
++          className="text-sm font-semibold text-slate-900"
++        >
+           Confirm Mode C upload
+         </h2>
+       </div>
+@@ -108,6 +102,6 @@ export function ModeCUploadWarningDialog({
+           {confirming ? "Uploading…" : "Override anyway"}
+         </Button>
+       </div>
+-    </dialog>
++    </ModalOverlay>
+   );
+ }
+diff --git a/disney-energy-gas-monitor/lib/master-sheets-config.ts b/disney-energy-gas-monitor/lib/master-sheets-config.ts
+index 168077b..c0904f3 100644
+--- a/disney-energy-gas-monitor/lib/master-sheets-config.ts
++++ b/disney-energy-gas-monitor/lib/master-sheets-config.ts
+@@ -20,7 +20,8 @@ export function isExpectedMasterSheetFilename(
+ 
+ /** Loose match key so uploads with spaces / mixed case still map to canonical names. */
+ export function normalizeMasterSheetFilenameKey(filename: string): string {
+-  const withoutExt = filename.replace(/\.(xlsx|xls)$/i, "").trim();
++  let withoutExt = filename.replace(/^.*[/\\]/, "").replace(/\.(xlsx|xls)$/i, "").trim();
++  withoutExt = withoutExt.replace(/\s+\(\d+\)$/i, "");
+   let key = withoutExt
+     .toLowerCase()
+     .replace(/\s+/g, "_")
+diff --git a/disney-energy-gas-monitor/lib/raw-data-config.ts b/disney-energy-gas-monitor/lib/raw-data-config.ts
+index b50ef21..8b7740c 100644
+--- a/disney-energy-gas-monitor/lib/raw-data-config.ts
++++ b/disney-energy-gas-monitor/lib/raw-data-config.ts
+@@ -15,9 +15,11 @@ const RAW_LOGICAL_ID_SET = new Set<string>(EXPECTED_RAW_LOGICAL_IDS);
+ 
+ /** Strip EMS export suffixes and normalize to logical id key. */
+ export function normalizeRawFilenameKey(filename: string): string {
+-  const base = filename.replace(/^.*[/\\]/, "").replace(/\.csv$/i, "");
++  let base = filename.replace(/^.*[/\\]/, "").replace(/\.csv$/i, "");
++  base = base.replace(/\s+\(\d+\)$/i, "");
+   let stem = base.replace(/_\d{14}_[a-f0-9]{4}$/i, "");
+   stem = stem.replace(/_[a-f0-9]{4}$/i, "");
++  stem = stem.replace(/_\d{14}$/i, "");
+   stem = stem
+     .trim()
+     .replace(/\s+/g, "_")
+diff --git a/disney-energy-gas-monitor/lib/release-stale-modal-locks.ts b/disney-energy-gas-monitor/lib/release-stale-modal-locks.ts
+new file mode 100644
+index 0000000..854cf90
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/release-stale-modal-locks.ts
+@@ -0,0 +1,14 @@
++/** Clear leftover native-dialog / inert locks that block clicks after uploads. */
++export function releaseStaleModalLocks(): void {
++  if (typeof document === "undefined") return;
++  document.querySelectorAll("dialog[open]").forEach((node) => {
++    if (!(node instanceof HTMLDialogElement)) return;
++    try {
++      node.close();
++    } catch {
++      // ignore
++    }
++  });
++  document.body.removeAttribute("inert");
++  document.body.style.removeProperty("pointer-events");
++}
+diff --git a/disney-energy-gas-monitor/lib/upload/batch-classifier.test.ts b/disney-energy-gas-monitor/lib/upload/batch-classifier.test.ts
+index 5eeb317..6b15cae 100644
+--- a/disney-energy-gas-monitor/lib/upload/batch-classifier.test.ts
++++ b/disney-energy-gas-monitor/lib/upload/batch-classifier.test.ts
+@@ -127,4 +127,22 @@ describe("classifyUploadBatch", () => {
+     ]);
+     assert.equal(result.kind, "mobile_fuels");
+   });
++
++  it("ignores optional CCP_COP_kWh when 28 raw batch files are present", () => {
++    const result = classifyUploadBatch([
++      ...RAW_SAMPLE_NAMES,
++      "HCCP Gas Capacity.csv",
++      RAW_CONVERSION_FEED_IN_MASTER,
++      "CCP_COP_kWh_20261027040135_19aa.csv",
++    ]);
++    assert.equal(result.kind, "raw_conversion");
++  });
++
++  it("lists unrecognized filenames on failure", () => {
++    const result = classifyUploadBatch(["totally_wrong_file.dat"]);
++    assert.equal(result.kind, "invalid");
++    if (result.kind === "invalid") {
++      assert.deepEqual(result.unrecognized, ["totally_wrong_file.dat"]);
++    }
++  });
+ });
+diff --git a/disney-energy-gas-monitor/lib/upload/batch-classifier.ts b/disney-energy-gas-monitor/lib/upload/batch-classifier.ts
+index 1c60b60..1bb7626 100644
+--- a/disney-energy-gas-monitor/lib/upload/batch-classifier.ts
++++ b/disney-energy-gas-monitor/lib/upload/batch-classifier.ts
+@@ -2,6 +2,7 @@ import {
+   EXPECTED_RAW_LOGICAL_IDS,
+   isHccpGasCapacityCsvFilename,
+   isRawCsvFilename,
++  normalizeRawFilenameKey,
+   resolveRawLogicalId,
+ } from "@/lib/raw-data-config";
+ import { isMobileGasolineDieselUploadFilename } from "@/lib/mobile-fuels/gasoline-diesel-filename";
+@@ -37,10 +38,37 @@ export interface UploadBatchRejection {
+   uploaded?: string[];
+   requiredCount?: number;
+   extraMasters?: string[];
++  unrecognized?: string[];
++  ignoredOptional?: string[];
+ }
+ 
+ export type UploadBatchOutcome = UploadBatchClassification | UploadBatchRejection;
+ 
++/** EMS sometimes bundles this optional meter file — do not count toward the 28-file batch. */
++const OPTIONAL_RAW_UPLOAD_KEYS = new Set(["CCP_COP_kWh"]);
++
++export function sanitizeUploadFilename(filename: string): string {
++  const base = filename.replace(/^.*[/\\]/, "").trim();
++  return base.replace(/\s+\(\d+\)(?=\.[^.]+$)/i, "");
++}
++
++export function isIgnoredUploadFilename(filename: string): boolean {
++  const base = sanitizeUploadFilename(filename);
++  const lower = base.toLowerCase();
++  if (
++    lower === "thumbs.db" ||
++    lower === "desktop.ini" ||
++    lower === ".ds_store"
++  ) {
++    return true;
++  }
++  if (isRawCsvFilename(base)) {
++    const key = normalizeRawFilenameKey(base);
++    if (key && OPTIONAL_RAW_UPLOAD_KEYS.has(key)) return true;
++  }
++  return false;
++}
++
+ function classifyFiles(filenames: string[]): {
+   rawLogicalIds: Set<string>;
+   hccpGasCapacityCsvCount: number;
+@@ -57,20 +85,21 @@ function classifyFiles(filenames: string[]): {
+   const unrecognized: string[] = [];
+ 
+   for (const name of filenames) {
+-    if (isMobileGasolineDieselUploadFilename(name)) {
++    const safeName = sanitizeUploadFilename(name);
++    if (isMobileGasolineDieselUploadFilename(safeName)) {
+       mobileGasolineDieselCount += 1;
+       continue;
+     }
+-    if (isMonthlyUtilitiesConsumptionFilename(name)) {
++    if (isMonthlyUtilitiesConsumptionFilename(safeName)) {
+       mobileUtilitiesConsumptionCount += 1;
+       continue;
+     }
+-    if (isRawCsvFilename(name)) {
+-      if (isHccpGasCapacityCsvFilename(name)) {
++    if (isRawCsvFilename(safeName)) {
++      if (isHccpGasCapacityCsvFilename(safeName)) {
+         hccpGasCapacityCsvCount += 1;
+         continue;
+       }
+-      const id = resolveRawLogicalId(name);
++      const id = resolveRawLogicalId(safeName);
+       if (!id) {
+         unrecognized.push(name);
+         continue;
+@@ -79,9 +108,9 @@ function classifyFiles(filenames: string[]): {
+       continue;
+     }
+ 
+-    const lower = name.toLowerCase();
++    const lower = safeName.toLowerCase();
+     if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+-      const canonical = resolveExpectedMasterSheetFilename(name);
++      const canonical = resolveExpectedMasterSheetFilename(safeName);
+       if (!canonical) {
+         unrecognized.push(name);
+         continue;
+@@ -115,6 +144,20 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
+     };
+   }
+ 
++  const ignoredOptional = filenames.filter((name) =>
++    isIgnoredUploadFilename(name),
++  );
++  const effectiveFilenames = filenames.filter(
++    (name) => !isIgnoredUploadFilename(name),
++  );
++  if (effectiveFilenames.length === 0) {
++    return {
++      kind: "invalid",
++      error: "No recognized upload files after removing optional extras.",
++      ignoredOptional,
++    };
++  }
++
+   const {
+     rawLogicalIds,
+     hccpGasCapacityCsvCount,
+@@ -122,13 +165,15 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
+     mobileGasolineDieselCount,
+     mobileUtilitiesConsumptionCount,
+     unrecognized,
+-  } = classifyFiles(filenames);
++  } = classifyFiles(effectiveFilenames);
+ 
+   if (unrecognized.length > 0) {
+     return {
+       kind: "invalid",
+       error:
+-        "Unrecognized file(s) in batch. Upload all four master workbooks, or 26 EMS CSVs plus HCCP Gas Capacity.csv and HKDL Daily Feed-in Tariff Report.",
++        "Unrecognized file(s) in batch. Mode A needs 26 EMS CSVs, HCCP Gas Capacity.csv, and HKDL Daily Feed-in Tariff Report (28 files). Mode B needs all four master workbooks.",
++      unrecognized,
++      ignoredOptional: ignoredOptional.length ? ignoredOptional : undefined,
+     };
+   }
+ 
+@@ -163,7 +208,7 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
+           "Mode C expects at most one Monthly Utilities Consumption workbook per upload.",
+       };
+     }
+-    if (filenames.length !== mobileModeCCount) {
++    if (effectiveFilenames.length !== mobileModeCCount) {
+       return {
+         kind: "invalid",
+         error:
+@@ -182,10 +227,10 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
+   );
+ 
+   if (rawCount === 0 && missingMasters.length === 0) {
+-    if (filenames.length !== EXPECTED_MASTER_SHEET_FILES.length) {
++    if (effectiveFilenames.length !== EXPECTED_MASTER_SHEET_FILES.length) {
+       return {
+         kind: "invalid",
+-        error: `Master replace requires exactly ${EXPECTED_MASTER_SHEET_FILES.length} workbooks, received ${filenames.length}.`,
++        error: `Master replace requires exactly ${EXPECTED_MASTER_SHEET_FILES.length} workbooks, received ${effectiveFilenames.length}.`,
+       };
+     }
+     return { kind: "master_replace" };
+@@ -234,10 +279,11 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
+       }
+ 
+       if (rawCount === EXPECTED_RAW_LOGICAL_IDS.length && hasFeedIn) {
+-        if (filenames.length !== RAW_CONVERSION_TOTAL_FILES) {
++        if (effectiveFilenames.length !== RAW_CONVERSION_TOTAL_FILES) {
+           return {
+             kind: "invalid",
+-            error: `Raw conversion requires exactly ${RAW_CONVERSION_TOTAL_FILES} files (26 EMS CSVs + HCCP Gas Capacity + HKDL Daily Feed-in Tariff Report), received ${filenames.length}.`,
++            error: `Raw conversion requires exactly ${RAW_CONVERSION_TOTAL_FILES} files (26 EMS CSVs + HCCP Gas Capacity + HKDL Daily Feed-in Tariff Report), received ${effectiveFilenames.length}.`,
++            ignoredOptional: ignoredOptional.length ? ignoredOptional : undefined,
+           };
+         }
+         return { kind: "raw_conversion" };
+diff --git a/hkdl-since-github-main.patch b/hkdl-since-github-main.patch
+deleted file mode 100644
+index c6ba538..0000000
+--- a/hkdl-since-github-main.patch
++++ /dev/null
+@@ -1,13 +0,0 @@
+-diff --git a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+-index 92a7939..2447530 100644
+---- a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+-+++ b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+-@@ -353,6 +353,8 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+-           latestDate: (json.latestDate as string | null | undefined) ?? null,
+-           earliestDate: (json.earliestDate as string | null | undefined) ?? null,
+-         });
+-+      } else if (json.mode === "mobile_fuels") {
+-+        onUploadSuccess?.({ latestDate: null, earliestDate: null });
+-       }
+-     } catch {
+-       setError("Upload failed — check network and try again");
