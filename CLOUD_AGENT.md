@@ -6,8 +6,9 @@ This Cursor Cloud workspace tracks **[Isaacttchung/HKDLenergydashboard](https://
 
 | Path | Role |
 |------|------|
-| Repo root | Wrapper `package.json` — run `npm run dev` / `npm run install:app` here |
-| `disney-energy-gas-monitor/` | Next.js app (all application code) |
+| Repo root | Wrapper `package.json` only (no root `package-lock.json`) — `npm run dev` / `npm run install:app` |
+| `.cursor/environment.json` | Single Cursor Cloud environment file (do not duplicate under the app folder) |
+| `disney-energy-gas-monitor/` | Next.js app (`package.json` + `package-lock.json` live here) |
 
 ## Agent workflow
 

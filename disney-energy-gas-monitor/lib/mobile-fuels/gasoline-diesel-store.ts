@@ -22,7 +22,6 @@ export async function saveGasolineDieselWorkbookUpload(
 }
 
 export async function loadGasolineDieselMonthlyStore(): Promise<MobileFuelMonthlyStore> {
-  if (cache) return cache;
   try {
     const text = await readFile(MOBILE_GASOLINE_DIESEL_JSON, "utf-8");
     cache = JSON.parse(text) as MobileFuelMonthlyStore;

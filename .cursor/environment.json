@@ -14,7 +14,7 @@
     {
       "name": "dashboard-dev",
       "command": "npm run dev",
-      "description": "Next.js dashboard on http://127.0.0.1:4000 (repo root → inner app)"
+      "description": "Next.js dashboard on http://127.0.0.1:4000 (repo root delegates to disney-energy-gas-monitor)"
     }
   ]
 }

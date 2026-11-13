@@ -44,7 +44,6 @@ export async function saveTgmjWorkbookUpload(
 }
 
 export async function loadTgmjBundle(): Promise<TgmjPersistedBundle> {
-  if (cache) return cache;
   try {
     const storeText = await readFile(TGMJ_MONTHLY_JSON, "utf-8");
     const store = JSON.parse(storeText) as TgmjMonthlyStore;

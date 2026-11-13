@@ -13,7 +13,7 @@ import { loadTgmjBundle } from "@/lib/monthly-utilities-gas/tgmj-store";
 import {
   everyMonthRecordedInStore,
   isCalendarMonthAlignedRange,
-} from "@/lib/mobile-fuels/gasoline-diesel-query";
+} from "@/lib/monthly-data-month-coverage";
 import type { MonthlyResortGasSummary, ResortGasMjLine, TimePreset } from "@/lib/types";
 
 function monthsInRange(from: string, to: string): string[] {

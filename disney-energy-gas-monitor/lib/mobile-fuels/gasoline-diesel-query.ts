@@ -1,14 +1,13 @@
-import {
-  eachMonthOfInterval,
-  endOfMonth,
-  format,
-  isSameDay,
-  parseISO,
-  startOfMonth,
-} from "date-fns";
+import { eachMonthOfInterval, format, parseISO } from "date-fns";
 import type { MobileFuelMonthlyStore } from "@/lib/mobile-fuels/parse-gasoline-diesel-workbook";
 import { loadGasolineDieselMonthlyStore } from "@/lib/mobile-fuels/gasoline-diesel-store";
+import {
+  everyMonthRecordedInStore,
+  isCalendarMonthAlignedRange,
+} from "@/lib/monthly-data-month-coverage";
 import type { MobileFuelsSummary, TimePreset } from "@/lib/types";
+
+export { isCalendarMonthAlignedRange, everyMonthRecordedInStore };
 
 const DIESEL_LABELS: Record<string, string> = {
   shuttle: "Shuttle",
@@ -54,20 +53,6 @@ function monthsInRange(from: string, to: string): string[] {
   return eachMonthOfInterval({ start, end }).map((d) => format(d, "yyyy-MM"));
 }
 
-/** Custom ranges must start on the 1st and end on the last day of a month. */
-export function isCalendarMonthAlignedRange(from: string, to: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-    return false;
-  }
-  const start = parseISO(from);
-  const end = parseISO(to);
-  if (end < start) return false;
-  return (
-    isSameDay(start, startOfMonth(start)) &&
-    isSameDay(end, endOfMonth(end))
-  );
-}
-
 function emptyMobileFuelsSummary(
   options: { monthlyForDay?: boolean } = {},
 ): MobileFuelsSummary {
@@ -78,15 +63,6 @@ function emptyMobileFuelsSummary(
     gasolineBreakdown: [],
     isMonthlyGranularity: options.monthlyForDay ?? false,
   };
-}
-
-/** Every calendar month in the period must exist in the uploaded workbook store. */
-export function everyMonthRecordedInStore(
-  store: MobileFuelMonthlyStore,
-  months: string[],
-): boolean {
-  if (months.length === 0) return false;
-  return months.every((ym) => ym in store);
 }
 
 function summarizeRecordedMonths(
