@@ -2,6 +2,7 @@ import {
   EXPECTED_RAW_LOGICAL_IDS,
   isHccpGasCapacityCsvFilename,
   isRawCsvFilename,
+  normalizeRawFilenameKey,
   resolveRawLogicalId,
 } from "@/lib/raw-data-config";
 import { isMobileGasolineDieselUploadFilename } from "@/lib/mobile-fuels/gasoline-diesel-filename";
@@ -37,9 +38,36 @@ export interface UploadBatchRejection {
   uploaded?: string[];
   requiredCount?: number;
   extraMasters?: string[];
+  unrecognized?: string[];
+  ignoredOptional?: string[];
 }
 
 export type UploadBatchOutcome = UploadBatchClassification | UploadBatchRejection;
+
+/** EMS sometimes bundles this optional meter file — do not count toward the 28-file batch. */
+const OPTIONAL_RAW_UPLOAD_KEYS = new Set(["CCP_COP_kWh"]);
+
+export function sanitizeUploadFilename(filename: string): string {
+  const base = filename.replace(/^.*[/\\]/, "").trim();
+  return base.replace(/\s+\(\d+\)(?=\.[^.]+$)/i, "");
+}
+
+export function isIgnoredUploadFilename(filename: string): boolean {
+  const base = sanitizeUploadFilename(filename);
+  const lower = base.toLowerCase();
+  if (
+    lower === "thumbs.db" ||
+    lower === "desktop.ini" ||
+    lower === ".ds_store"
+  ) {
+    return true;
+  }
+  if (isRawCsvFilename(base)) {
+    const key = normalizeRawFilenameKey(base);
+    if (key && OPTIONAL_RAW_UPLOAD_KEYS.has(key)) return true;
+  }
+  return false;
+}
 
 function classifyFiles(filenames: string[]): {
   rawLogicalIds: Set<string>;
@@ -57,20 +85,21 @@ function classifyFiles(filenames: string[]): {
   const unrecognized: string[] = [];
 
   for (const name of filenames) {
-    if (isMobileGasolineDieselUploadFilename(name)) {
+    const safeName = sanitizeUploadFilename(name);
+    if (isMobileGasolineDieselUploadFilename(safeName)) {
       mobileGasolineDieselCount += 1;
       continue;
     }
-    if (isMonthlyUtilitiesConsumptionFilename(name)) {
+    if (isMonthlyUtilitiesConsumptionFilename(safeName)) {
       mobileUtilitiesConsumptionCount += 1;
       continue;
     }
-    if (isRawCsvFilename(name)) {
-      if (isHccpGasCapacityCsvFilename(name)) {
+    if (isRawCsvFilename(safeName)) {
+      if (isHccpGasCapacityCsvFilename(safeName)) {
         hccpGasCapacityCsvCount += 1;
         continue;
       }
-      const id = resolveRawLogicalId(name);
+      const id = resolveRawLogicalId(safeName);
       if (!id) {
         unrecognized.push(name);
         continue;
@@ -79,9 +108,9 @@ function classifyFiles(filenames: string[]): {
       continue;
     }
 
-    const lower = name.toLowerCase();
+    const lower = safeName.toLowerCase();
     if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-      const canonical = resolveExpectedMasterSheetFilename(name);
+      const canonical = resolveExpectedMasterSheetFilename(safeName);
       if (!canonical) {
         unrecognized.push(name);
         continue;
@@ -115,6 +144,20 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
     };
   }
 
+  const ignoredOptional = filenames.filter((name) =>
+    isIgnoredUploadFilename(name),
+  );
+  const effectiveFilenames = filenames.filter(
+    (name) => !isIgnoredUploadFilename(name),
+  );
+  if (effectiveFilenames.length === 0) {
+    return {
+      kind: "invalid",
+      error: "No recognized upload files after removing optional extras.",
+      ignoredOptional,
+    };
+  }
+
   const {
     rawLogicalIds,
     hccpGasCapacityCsvCount,
@@ -122,13 +165,15 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
     mobileGasolineDieselCount,
     mobileUtilitiesConsumptionCount,
     unrecognized,
-  } = classifyFiles(filenames);
+  } = classifyFiles(effectiveFilenames);
 
   if (unrecognized.length > 0) {
     return {
       kind: "invalid",
       error:
-        "Unrecognized file(s) in batch. Upload all four master workbooks, or 26 EMS CSVs plus HCCP Gas Capacity.csv and HKDL Daily Feed-in Tariff Report.",
+        "Unrecognized file(s) in batch. Mode A needs 26 EMS CSVs, HCCP Gas Capacity.csv, and HKDL Daily Feed-in Tariff Report (28 files). Mode B needs all four master workbooks.",
+      unrecognized,
+      ignoredOptional: ignoredOptional.length ? ignoredOptional : undefined,
     };
   }
 
@@ -163,7 +208,7 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
           "Mode C expects at most one Monthly Utilities Consumption workbook per upload.",
       };
     }
-    if (filenames.length !== mobileModeCCount) {
+    if (effectiveFilenames.length !== mobileModeCCount) {
       return {
         kind: "invalid",
         error:
@@ -182,10 +227,10 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
   );
 
   if (rawCount === 0 && missingMasters.length === 0) {
-    if (filenames.length !== EXPECTED_MASTER_SHEET_FILES.length) {
+    if (effectiveFilenames.length !== EXPECTED_MASTER_SHEET_FILES.length) {
       return {
         kind: "invalid",
-        error: `Master replace requires exactly ${EXPECTED_MASTER_SHEET_FILES.length} workbooks, received ${filenames.length}.`,
+        error: `Master replace requires exactly ${EXPECTED_MASTER_SHEET_FILES.length} workbooks, received ${effectiveFilenames.length}.`,
       };
     }
     return { kind: "master_replace" };
@@ -234,10 +279,11 @@ export function classifyUploadBatch(filenames: string[]): UploadBatchOutcome {
       }
 
       if (rawCount === EXPECTED_RAW_LOGICAL_IDS.length && hasFeedIn) {
-        if (filenames.length !== RAW_CONVERSION_TOTAL_FILES) {
+        if (effectiveFilenames.length !== RAW_CONVERSION_TOTAL_FILES) {
           return {
             kind: "invalid",
-            error: `Raw conversion requires exactly ${RAW_CONVERSION_TOTAL_FILES} files (26 EMS CSVs + HCCP Gas Capacity + HKDL Daily Feed-in Tariff Report), received ${filenames.length}.`,
+            error: `Raw conversion requires exactly ${RAW_CONVERSION_TOTAL_FILES} files (26 EMS CSVs + HCCP Gas Capacity + HKDL Daily Feed-in Tariff Report), received ${effectiveFilenames.length}.`,
+            ignoredOptional: ignoredOptional.length ? ignoredOptional : undefined,
           };
         }
         return { kind: "raw_conversion" };

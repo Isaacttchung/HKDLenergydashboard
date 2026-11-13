@@ -299,6 +299,11 @@ export function DashboardPage({
 
   const handleMasterSheetUploaded = useCallback(
     (meta: MasterSheetUploadMeta) => {
+      if (meta.skipServerRefresh) {
+        setDataRefreshKey((key) => key + 1);
+        return;
+      }
+
       const previousMax = dataMaxDate;
       const nextMax = meta.latestDate
         ? capSelectableMaxDate(meta.latestDate)

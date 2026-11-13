@@ -12,6 +12,7 @@ import { GasManualEntryDialog } from "@/components/dashboard/gas-manual-entry-di
 import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dialog";
 import type { GasManualEntryRequest } from "@/components/dashboard/gas-manual-entry-dialog";
 import type { MasterSheetUploadMeta } from "@/lib/master-sheet-upload-meta";
+import { releaseStaleModalLocks } from "@/lib/release-stale-modal-locks";
 import type { RawCsvWarning } from "@/lib/raw-csv-validation";
 import type { DownloadableAfterWarning } from "@/lib/upload/downloadable-after-warnings";
 import { EXPECTED_RAW_LOGICAL_IDS } from "@/lib/expected-raw-logical-ids";
@@ -307,7 +308,11 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         setDuplicateDateOpen(false);
         clearUploadActionToken();
         setError(json.error ?? "Upload failed");
-        if (json.missing?.length) {
+        if (json.unrecognized?.length) {
+          setError(
+            `${json.error ?? "Upload failed"} — unrecognized: ${(json.unrecognized as string[]).join(", ")}`,
+          );
+        } else if (json.missing?.length) {
           setError(
             `${json.error ?? "Upload failed"} — missing: ${(json.missing as string[]).join(", ")}`,
           );
@@ -335,6 +340,11 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       setModeCWarningMessage(null);
       setModeCUnchangedLabels([]);
       setModeCOutdated([]);
+
+      releaseStaleModalLocks();
+      setPasswordDialogOpen(false);
+      setPasswordPurpose(null);
+      passwordPurposeRef.current = null;
 
       const saved = (json.saved as string[]).join(", ");
       setMessage(

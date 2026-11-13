@@ -127,4 +127,22 @@ describe("classifyUploadBatch", () => {
     ]);
     assert.equal(result.kind, "mobile_fuels");
   });
+
+  it("ignores optional CCP_COP_kWh when 28 raw batch files are present", () => {
+    const result = classifyUploadBatch([
+      ...RAW_SAMPLE_NAMES,
+      "HCCP Gas Capacity.csv",
+      RAW_CONVERSION_FEED_IN_MASTER,
+      "CCP_COP_kWh_20261027040135_19aa.csv",
+    ]);
+    assert.equal(result.kind, "raw_conversion");
+  });
+
+  it("lists unrecognized filenames on failure", () => {
+    const result = classifyUploadBatch(["totally_wrong_file.dat"]);
+    assert.equal(result.kind, "invalid");
+    if (result.kind === "invalid") {
+      assert.deepEqual(result.unrecognized, ["totally_wrong_file.dat"]);
+    }
+  });
 });

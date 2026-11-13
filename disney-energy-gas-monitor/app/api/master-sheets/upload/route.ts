@@ -113,8 +113,15 @@ async function handleUpload(form: FormData) {
   const classification = classifyUploadBatch(files.map((f) => f.name));
 
   if (classification.kind === "invalid") {
-    const { error, missing, uploaded, requiredCount, extraMasters } =
-      classification;
+    const {
+      error,
+      missing,
+      uploaded,
+      requiredCount,
+      extraMasters,
+      unrecognized,
+      ignoredOptional,
+    } = classification;
     return NextResponse.json(
       {
         error,
@@ -122,6 +129,8 @@ async function handleUpload(form: FormData) {
         ...(uploaded ? { uploaded } : {}),
         ...(requiredCount !== undefined ? { requiredCount } : {}),
         ...(extraMasters ? { extraMasters } : {}),
+        ...(unrecognized?.length ? { unrecognized } : {}),
+        ...(ignoredOptional?.length ? { ignoredOptional } : {}),
       },
       { status: 400 },
     );

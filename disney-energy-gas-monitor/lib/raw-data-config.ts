@@ -15,9 +15,11 @@ const RAW_LOGICAL_ID_SET = new Set<string>(EXPECTED_RAW_LOGICAL_IDS);
 
 /** Strip EMS export suffixes and normalize to logical id key. */
 export function normalizeRawFilenameKey(filename: string): string {
-  const base = filename.replace(/^.*[/\\]/, "").replace(/\.csv$/i, "");
+  let base = filename.replace(/^.*[/\\]/, "").replace(/\.csv$/i, "");
+  base = base.replace(/\s+\(\d+\)$/i, "");
   let stem = base.replace(/_\d{14}_[a-f0-9]{4}$/i, "");
   stem = stem.replace(/_[a-f0-9]{4}$/i, "");
+  stem = stem.replace(/_\d{14}$/i, "");
   stem = stem
     .trim()
     .replace(/\s+/g, "_")

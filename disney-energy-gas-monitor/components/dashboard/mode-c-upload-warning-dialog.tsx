@@ -1,11 +1,11 @@
 "use client";
 
+import { ModalOverlay } from "@/components/dashboard/modal-overlay";
 import { Button } from "@/components/ui/button";
 import {
   formatYearMonthLabel,
   type ModeCOutdatedWarning,
 } from "@/lib/upload/mode-c-upload-types";
-import { useEffect, useRef } from "react";
 
 interface ModeCUploadWarningDialogProps {
   message: string | null;
@@ -26,29 +26,23 @@ export function ModeCUploadWarningDialog({
   onContinue,
   onCancel,
 }: ModeCUploadWarningDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const hasContent = unchangedFileLabels.length > 0 || outdated.length > 0;
-
-  useEffect(() => {
-    const el = dialogRef.current;
-    if (!el) return;
-    if (open && hasContent) {
-      if (!el.open) el.showModal();
-    } else if (el.open) {
-      el.close();
-    }
-  }, [open, hasContent]);
-
-  if (!hasContent) return null;
+  if (!open || !hasContent) return null;
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="fixed left-1/2 top-1/2 z-[60] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-amber-200 bg-white p-0 shadow-xl backdrop:bg-black/40 open:block"
+    <ModalOverlay
+      open={open}
       onClose={onCancel}
+      backdropLabel="Cancel Mode C upload"
+      overlayClassName="z-[60]"
+      panelClassName="w-[min(32rem,calc(100vw-2rem))] rounded-lg border border-amber-200 p-0"
+      aria-labelledby="mode-c-upload-warning-title"
     >
       <div className="border-b border-amber-100 bg-amber-50/80 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-900">
+        <h2
+          id="mode-c-upload-warning-title"
+          className="text-sm font-semibold text-slate-900"
+        >
           Confirm Mode C upload
         </h2>
       </div>
@@ -108,6 +102,6 @@ export function ModeCUploadWarningDialog({
           {confirming ? "Uploading…" : "Override anyway"}
         </Button>
       </div>
-    </dialog>
+    </ModalOverlay>
   );
 }

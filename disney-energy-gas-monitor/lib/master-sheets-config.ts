@@ -20,7 +20,8 @@ export function isExpectedMasterSheetFilename(
 
 /** Loose match key so uploads with spaces / mixed case still map to canonical names. */
 export function normalizeMasterSheetFilenameKey(filename: string): string {
-  const withoutExt = filename.replace(/\.(xlsx|xls)$/i, "").trim();
+  let withoutExt = filename.replace(/^.*[/\\]/, "").replace(/\.(xlsx|xls)$/i, "").trim();
+  withoutExt = withoutExt.replace(/\s+\(\d+\)$/i, "");
   let key = withoutExt
     .toLowerCase()
     .replace(/\s+/g, "_")
