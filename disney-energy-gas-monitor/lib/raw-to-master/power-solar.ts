@@ -1,9 +1,19 @@
-import { readFile, writeFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import * as XLSX from "xlsx";
 import {
   normalizeHeader,
   excelSerialToDate,
 } from "@/lib/datastore/parsers/excel-utils";
+import {
+  loadExcelWorkbook,
+  saveExcelWorkbook,
+} from "@/lib/raw-to-master/exceljs-preserve";
+import {
+  buildHeaderColumnMapExcel,
+  ensurePowerSolarDateRow,
+  getPowerSolarSheet,
+  setNumericCellExcel,
+} from "@/lib/raw-to-master/power-solar-excel";
 import { csvColumnDailyDeltaKwh } from "@/lib/raw-to-master/csv-column-delta";
 import { FeedInTariffLookup } from "@/lib/raw-to-master/feed-in-tariff-lookup";
 import {
@@ -12,10 +22,11 @@ import {
 } from "@/lib/raw-to-master/excel-date";
 import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
 import {
-  writeHotelContextFormulas,
-  writeParkContextFormulas,
+  writeHotelContextFormulasExcel,
+  writeParkContextFormulasExcel,
   PS_PARK_COL,
 } from "@/lib/raw-to-master/power-solar-context";
+import type ExcelJS from "exceljs";
 import {
   HOTEL_PROPERTY_SUBTOTALS,
   MERCURY_RAW_LOGICAL_IDS,
@@ -184,8 +195,7 @@ export async function convertPowerSolarMaster(
   const feedInBuffer = await readFile(input.feedInTariffPath);
   const feedIn = FeedInTariffLookup.fromBuffer(feedInBuffer);
 
-  const buffer = await readFile(input.masterWorkbookPath);
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const workbook = await loadExcelWorkbook(input.masterWorkbookPath);
   const meterValues = computeMeterValues(
     input.dataDate,
     input.rawCsvByLogicalId,
@@ -196,21 +206,21 @@ export async function convertPowerSolarMaster(
 
   for (const area of ["CCP", "HCCP", "Hotel", "Park"] as PowerSolarArea[]) {
     const config = POWER_SOLAR_SHEET_CONFIG[area];
-    const sheet = workbook.Sheets[config.sheetName];
-    if (!sheet) {
-      throw new Error(
-        `Power_Solar master missing sheet "${config.sheetName}"`,
-      );
-    }
+    const sheet = getPowerSolarSheet(workbook, area);
 
-    const headerMap = buildHeaderColumnMap(sheet, config.headerRowIndex);
+    const headerMap = buildHeaderColumnMapExcel(sheet, config.headerRowIndex);
     const firstDataRow = config.headerRowIndex + 1;
-    let dataRow = findDateRow(sheet, input.dataDate, firstDataRow);
-    if (dataRow === null) {
-      dataRow = appendDateRow(sheet, input.dataDate);
-    }
+    const dataRow = ensurePowerSolarDateRow(
+      sheet,
+      input.dataDate,
+      firstDataRow,
+    );
 
     let wroteInArea = false;
+    const styleColFor = (col: number): ExcelJS.Cell | undefined => {
+      const priorRow = dataRow > firstDataRow + 1 ? dataRow - 1 : dataRow;
+      return sheet.getRow(priorRow).getCell(col);
+    };
 
     for (const mapping of POWER_SOLAR_METER_MAPPINGS.filter(
       (m) => m.area === area,
@@ -226,7 +236,7 @@ export async function convertPowerSolarMaster(
         );
       }
 
-      setNumericCell(sheet, dataRow, col, value);
+      setNumericCellExcel(sheet, dataRow, col, value, styleColFor(col));
       metersWritten += 1;
       wroteInArea = true;
     }
@@ -243,7 +253,7 @@ export async function convertPowerSolarMaster(
         }
         const subCol = headerMap.get(normalizeHeader(group.subtotalHeader));
         if (subCol !== undefined) {
-          setNumericCell(sheet, dataRow, subCol, subtotal);
+          setNumericCellExcel(sheet, dataRow, subCol, subtotal, styleColFor(subCol));
         }
       }
     }
@@ -251,27 +261,27 @@ export async function convertPowerSolarMaster(
     const totalHeader = POWER_SOLAR_AREA_TOTAL_HEADERS[area];
     const totalCol = headerMap.get(normalizeHeader(totalHeader));
     if (totalCol !== undefined && wroteInArea) {
-      setNumericCell(sheet, dataRow, totalCol, areaSum);
+      setNumericCellExcel(sheet, dataRow, totalCol, areaSum, styleColFor(totalCol));
     }
 
     if (area === "Hotel" && wroteInArea) {
-      writeHotelContextFormulas(sheet, dataRow);
+      writeHotelContextFormulasExcel(sheet, dataRow);
     }
 
     if (area === "Park" && wroteInArea) {
       const outdoor = outdoorAirTempFromDaily1Csv(input.rawCsvByLogicalId);
       if (outdoor !== null) {
-        setNumericCell(sheet, dataRow, PS_PARK_COL.temperature, outdoor);
+        setNumericCellExcel(
+          sheet,
+          dataRow,
+          PS_PARK_COL.temperature + 1,
+          outdoor,
+          styleColFor(PS_PARK_COL.temperature + 1),
+        );
       }
-      const attenCell =
-        sheet[
-          XLSX.utils.encode_cell({
-            r: dataRow,
-            c: PS_PARK_COL.attendance,
-          })
-        ];
-      const atten = Number(attenCell?.v);
-      writeParkContextFormulas(
+      const attenVal = sheet.getRow(dataRow).getCell(PS_PARK_COL.attendance + 1).value;
+      const atten = Number(attenVal);
+      writeParkContextFormulasExcel(
         sheet,
         dataRow,
         Number.isFinite(atten) ? atten : 0,
@@ -281,8 +291,7 @@ export async function convertPowerSolarMaster(
     if (wroteInArea) areasUpdated.add(area);
   }
 
-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-  await writeFile(input.masterWorkbookPath, out);
+  await saveExcelWorkbook(workbook, input.masterWorkbookPath);
 
   return {
     dataDate: input.dataDate,

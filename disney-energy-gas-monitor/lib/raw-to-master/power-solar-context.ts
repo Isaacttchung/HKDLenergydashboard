@@ -1,13 +1,19 @@
-import { readFile, writeFile } from "fs/promises";
+import type ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
 import {
   excelSerialMatchesIsoDate,
   isoDateToExcelSerial,
 } from "@/lib/raw-to-master/excel-date";
 import {
-  POWER_SOLAR_SHEET_CONFIG,
-  type PowerSolarArea,
-} from "@/lib/raw-to-master/power-solar-mappings";
+  loadExcelWorkbook,
+  saveExcelWorkbook,
+} from "@/lib/raw-to-master/exceljs-preserve";
+import {
+  ensurePowerSolarDateRow,
+  getPowerSolarSheet,
+  setNumericCellExcel,
+} from "@/lib/raw-to-master/power-solar-excel";
+import { POWER_SOLAR_SHEET_CONFIG } from "@/lib/raw-to-master/power-solar-mappings";
 
 /** 0-based column indices on Hotel / Park daily rows. */
 export const PS_HOTEL_COL = { occupancy: 14, thirtyDays: 15 } as const;
@@ -106,6 +112,31 @@ export function writeParkContextFormulas(
   );
 }
 
+export function writeHotelContextFormulasExcel(
+  sheet: ExcelJS.Worksheet,
+  dataRow: number,
+): void {
+  sheet.getRow(dataRow).getCell(PS_HOTEL_COL.thirtyDays + 1).value = {
+    formula: `AND(A${dataRow}>=(TODAY()-30),A${dataRow}<TODAY())`,
+    result: true,
+  };
+}
+
+export function writeParkContextFormulasExcel(
+  sheet: ExcelJS.Worksheet,
+  dataRow: number,
+  attendance: number,
+): void {
+  sheet.getRow(dataRow).getCell(PS_PARK_COL.thirtyDays + 1).value = {
+    formula: `AND(A${dataRow}>=(TODAY()-30),A${dataRow}<TODAY())`,
+    result: true,
+  };
+  sheet.getRow(dataRow).getCell(PS_PARK_COL.remarks + 1).value = {
+    formula: `IF(Z${dataRow}=0,"CLOSE","OPEN")`,
+    result: attendance === 0 ? "CLOSE" : "OPEN",
+  };
+}
+
 export interface PowerSolarContextUpdate {
   dataDate: string;
   outdoorAirTempC?: number | null;
@@ -121,44 +152,58 @@ export async function updatePowerSolarContextColumns(
   masterWorkbookPath: string,
   update: PowerSolarContextUpdate,
 ): Promise<{ hotelRow: number | null; parkRow: number | null }> {
-  const buffer = await readFile(masterWorkbookPath);
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const workbook = await loadExcelWorkbook(masterWorkbookPath);
 
   let hotelRow: number | null = null;
   let parkRow: number | null = null;
 
-  const hotelSheet = workbook.Sheets.Hotel;
-  if (hotelSheet) {
+  try {
+    const hotelSheet = getPowerSolarSheet(workbook, "Hotel");
     const cfg = POWER_SOLAR_SHEET_CONFIG.Hotel;
     const firstData = cfg.headerRowIndex + 1;
-    let row = findDateRow(hotelSheet, update.dataDate, firstData);
-    if (row === null) row = appendDateRow(hotelSheet, update.dataDate);
+    const row = ensurePowerSolarDateRow(hotelSheet, update.dataDate, firstData);
     hotelRow = row;
-    writeHotelContextFormulas(hotelSheet, row);
+    writeHotelContextFormulasExcel(hotelSheet, row);
     if (update.overallOccupancy != null) {
-      setNumber(hotelSheet, row, PS_HOTEL_COL.occupancy, update.overallOccupancy);
+      setNumericCellExcel(
+        hotelSheet,
+        row,
+        PS_HOTEL_COL.occupancy + 1,
+        update.overallOccupancy,
+      );
     }
+  } catch {
   }
 
-  const parkSheet = workbook.Sheets.Park;
-  if (parkSheet) {
+  try {
+    const parkSheet = getPowerSolarSheet(workbook, "Park");
     const cfg = POWER_SOLAR_SHEET_CONFIG.Park;
     const firstData = cfg.headerRowIndex + 1;
-    let row = findDateRow(parkSheet, update.dataDate, firstData);
-    if (row === null) row = appendDateRow(parkSheet, update.dataDate);
+    const row = ensurePowerSolarDateRow(parkSheet, update.dataDate, firstData);
     parkRow = row;
-    const atten = update.atten ?? Number(parkSheet[XLSX.utils.encode_cell({ r: row, c: PS_PARK_COL.attendance })]?.v) ?? 0;
+    const attenCell = parkSheet.getRow(row).getCell(PS_PARK_COL.attendance + 1).value;
+    const atten = update.atten ?? Number(attenCell) ?? 0;
     if (update.atten != null) {
-      setNumber(parkSheet, row, PS_PARK_COL.attendance, update.atten);
+      setNumericCellExcel(
+        parkSheet,
+        row,
+        PS_PARK_COL.attendance + 1,
+        update.atten,
+      );
     }
     if (update.outdoorAirTempC != null) {
-      setNumber(parkSheet, row, PS_PARK_COL.temperature, update.outdoorAirTempC);
+      setNumericCellExcel(
+        parkSheet,
+        row,
+        PS_PARK_COL.temperature + 1,
+        update.outdoorAirTempC,
+      );
     }
-    writeParkContextFormulas(parkSheet, row, update.atten ?? atten);
+    writeParkContextFormulasExcel(parkSheet, row, update.atten ?? atten);
+  } catch {
   }
 
-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-  await writeFile(masterWorkbookPath, out);
+  await saveExcelWorkbook(workbook, masterWorkbookPath);
 
   return { hotelRow, parkRow };
 }

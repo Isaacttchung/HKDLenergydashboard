@@ -1,5 +1,4 @@
 import { readFile } from "fs/promises";
-import * as XLSX from "xlsx";
 import {
   Top10EditorError,
   ensureMappingOverrideCopy,
@@ -11,8 +10,8 @@ import {
   top10RawDataRowsOverridePath,
   type Top10RawDataRow,
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+import { buildWebSsRowIndexExcel } from "@/lib/raw-to-master/top-10-excel";
 import {
-  buildWebSsRowIndex,
   normalizeTop10Location,
   resolveWebSsRow,
   webSsRowKey,
@@ -112,7 +111,7 @@ export async function applyTop10Rename(
   options: { dryRun?: boolean } = {},
 ): Promise<{ preview: Top10RenamePreview; backupDir: string | null }> {
   const { workbook, sheet } = await readTop10Workbook();
-  const sheetIndex = buildWebSsRowIndex(sheet);
+  const sheetIndex = buildWebSsRowIndexExcel(sheet);
   const rows = [...getTop10RawDataRows()];
   const preview = planTop10Rename(input, rows, sheetIndex);
 
@@ -142,14 +141,9 @@ export async function applyTop10Rename(
     location: fields.newLocation,
   };
 
-  sheet[XLSX.utils.encode_cell({ r: preview.sheetRow, c: 0 })] = {
-    t: "s",
-    v: fields.newMeter,
-  };
-  sheet[XLSX.utils.encode_cell({ r: preview.sheetRow, c: 1 })] = {
-    t: "s",
-    v: fields.newLocation,
-  };
+  const row = sheet.getRow(preview.sheetRow);
+  row.getCell(1).value = fields.newMeter;
+  row.getCell(2).value = fields.newLocation;
 
   const backupDir = await persistTop10Edit(workbook, mappingRows);
   return { preview, backupDir };

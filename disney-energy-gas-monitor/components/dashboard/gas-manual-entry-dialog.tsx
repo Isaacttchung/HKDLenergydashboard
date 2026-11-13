@@ -2,7 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { computeHccpOverallOccupancy } from "@/lib/raw-to-master/hccp-gas-manual";
-import { readMasterSheetUploadToken } from "@/lib/upload/upload-token-session";
+import {
+  persistMasterSheetUploadToken,
+  readMasterSheetUploadToken,
+} from "@/lib/upload/upload-token-session";
 import { Loader2 } from "lucide-react";
 import {
   useEffect,
@@ -20,6 +23,8 @@ export interface GasManualEntryRequest {
 interface GasManualEntryDialogProps {
   request: GasManualEntryRequest | null;
   uploadToken: string;
+  /** Host has `MASTER_SHEET_UPLOAD_TOKEN` — show password field when the upload token was not kept. */
+  requiresUploadPassword?: boolean;
   open: boolean;
   onCompleted: (message: string) => void;
   onDismiss: () => void;
@@ -38,6 +43,7 @@ type FieldKey = (typeof FIELDS)[number]["key"];
 export function GasManualEntryDialog({
   request,
   uploadToken,
+  requiresUploadPassword = false,
   open,
   onCompleted,
   onDismiss,
@@ -53,6 +59,8 @@ export function GasManualEntryDialog({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadPassword, setUploadPassword] = useState("");
+  const [showPasswordField, setShowPasswordField] = useState(false);
 
   useEffect(() => {
     const el = dialogRef.current;
@@ -74,8 +82,16 @@ export function GasManualEntryDialog({
         atten: "",
       });
       setError(null);
+      setUploadPassword("");
+      setShowPasswordField(false);
     }
   }, [open, request?.consumptionDate]);
+
+  useEffect(() => {
+    if (!open || !requiresUploadPassword) return;
+    const existing = (uploadToken || readMasterSheetUploadToken()).trim();
+    setShowPasswordField(!existing);
+  }, [open, requiresUploadPassword, uploadToken]);
 
   const previewOverall = useMemo(() => {
     const dlh = Number(values.dlhOccupancy);
@@ -102,7 +118,20 @@ export function GasManualEntryDialog({
     }
 
     try {
-      const token = (uploadToken || readMasterSheetUploadToken()).trim();
+      const token = (
+        uploadToken ||
+        readMasterSheetUploadToken() ||
+        uploadPassword
+      ).trim();
+      if (requiresUploadPassword && !token) {
+        setShowPasswordField(true);
+        setError("Enter the host upload password to save manual gas fields.");
+        setSaving(false);
+        return;
+      }
+      if (token) {
+        persistMasterSheetUploadToken(token);
+      }
       const headers: HeadersInit = { "Content-Type": "application/json" };
       if (token) {
         headers["x-upload-token"] = token;
@@ -118,7 +147,14 @@ export function GasManualEntryDialog({
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error ?? "Could not save gas manual fields");
+        if (res.status === 401) {
+          setShowPasswordField(true);
+          setError(
+            "Invalid upload password — enter the same password you used for the dropbox upload.",
+          );
+        } else {
+          setError(json.error ?? "Could not save gas manual fields");
+        }
         return;
       }
       onCompleted(
@@ -191,6 +227,23 @@ export function GasManualEntryDialog({
             </span>
           )}
         </div>
+        {showPasswordField && (
+          <FieldGroup
+            label="Upload password"
+            id={`${formId}-upload-password`}
+          >
+            <input
+              id={`${formId}-upload-password`}
+              type="password"
+              autoComplete="current-password"
+              disabled={saving}
+              value={uploadPassword}
+              onChange={(e) => setUploadPassword(e.target.value)}
+              placeholder="Same as Excel/Raw Data Dropbox"
+              className="w-full rounded-md border border-brand-border px-2 py-1.5 text-sm"
+            />
+          </FieldGroup>
+        )}
         {error && (
           <p className="text-xs text-red-600" role="alert">
             {error}

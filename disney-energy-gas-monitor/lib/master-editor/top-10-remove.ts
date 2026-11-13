@@ -9,14 +9,14 @@ import {
   assertRemovableMappingRow,
   assertRemovableSheetRow,
 } from "@/lib/master-editor/top-10-protected-rows";
-import { deleteSheetRowAt } from "@/lib/master-editor/top-10-sheet-mutate";
+import { deleteSheetRowAtExcel } from "@/lib/master-editor/top-10-sheet-mutate-excel";
 import {
   getTop10RawDataRows,
   top10RawDataRowsOverridePath,
   type Top10RawDataRow,
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+import { buildWebSsRowIndexExcel } from "@/lib/raw-to-master/top-10-excel";
 import {
-  buildWebSsRowIndex,
   normalizeTop10Location,
   resolveWebSsRow,
   webSsRowKey,
@@ -75,7 +75,7 @@ export async function applyTop10Remove(
   options: { dryRun?: boolean } = {},
 ): Promise<{ preview: Top10RemovePreview; backupDir: string | null }> {
   const { workbook, sheet } = await readTop10Workbook();
-  const sheetIndex = buildWebSsRowIndex(sheet);
+  const sheetIndex = buildWebSsRowIndexExcel(sheet);
   const preview = planTop10Remove(input, getTop10RawDataRows(), sheetIndex);
 
   if (options.dryRun) {
@@ -94,7 +94,7 @@ export async function applyTop10Remove(
     );
   }
 
-  deleteSheetRowAt(sheet, preview.sheetRow);
+  deleteSheetRowAtExcel(sheet, preview.sheetRow);
   const backupDir = await persistTop10Edit(workbook, stored);
   return { preview, backupDir };
 }

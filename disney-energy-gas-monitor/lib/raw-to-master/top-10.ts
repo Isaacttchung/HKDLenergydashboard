@@ -1,20 +1,25 @@
-import { readFile, writeFile } from "fs/promises";
-import * as XLSX from "xlsx";
+import { readFile } from "fs/promises";
 import { getTop10RawDataRows } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+import {
+  loadExcelWorkbook,
+  saveExcelWorkbook,
+} from "@/lib/raw-to-master/exceljs-preserve";
+import {
+  appendWebSsDateColumnExcel,
+  buildWebSsRowIndexExcel,
+  findWebSsDateColumnExcel,
+  getWebSsSheet,
+  resolveWebSsRowExcel,
+  WEBSS_DATE_HEADER_ROW,
+  WEBSS_FIRST_DATE_COL,
+} from "@/lib/raw-to-master/top-10-excel";
 import {
   csvColumnDailyAverage,
   csvColumnDailyDeltaKwh,
 } from "@/lib/raw-to-master/csv-column-delta";
 import { FeedInTariffLookup } from "@/lib/raw-to-master/feed-in-tariff-lookup";
 import { logicalIdForTop10Link } from "@/lib/raw-to-master/top-10-link-map";
-import {
-  appendWebSsDateColumn,
-  buildWebSsRowIndex,
-  findWebSsDateColumn,
-  normalizeTop10Location,
-  resolveWebSsRow,
-  WEBSS_SHEET_NAME,
-} from "@/lib/raw-to-master/top-10-webss";
+import { normalizeTop10Location } from "@/lib/raw-to-master/top-10-webss";
 
 import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
 import {
@@ -153,17 +158,10 @@ export async function convertTop10Master(
     }
   }
 
-  const buffer = await readFile(input.masterWorkbookPath);
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
-  const sheet = workbook.Sheets[WEBSS_SHEET_NAME];
-  if (!sheet) {
-    throw new Top10ConversionError(
-      `Top_10 master missing sheet "${WEBSS_SHEET_NAME}"`,
-      "MISSING_RAW",
-    );
-  }
+  const workbook = await loadExcelWorkbook(input.masterWorkbookPath);
+  const sheet = getWebSsSheet(workbook);
 
-  let dateCol = findWebSsDateColumn(sheet, input.dataDate);
+  let dateCol = findWebSsDateColumnExcel(sheet, input.dataDate);
   if (dateCol !== null && !input.replaceExisting) {
     throw new Top10ConversionError(
       `Top_10 already has data for ${input.dataDate}`,
@@ -171,10 +169,15 @@ export async function convertTop10Master(
     );
   }
   if (dateCol === null) {
-    dateCol = appendWebSsDateColumn(sheet, input.dataDate);
+    dateCol = appendWebSsDateColumnExcel(sheet, input.dataDate);
   }
 
-  const rowIndex = buildWebSsRowIndex(sheet);
+  const rowIndex = buildWebSsRowIndexExcel(sheet);
+  const templateCol =
+    dateCol > WEBSS_FIRST_DATE_COL ? dateCol - 1 : dateCol;
+  const prevFmt = sheet
+    .getRow(WEBSS_DATE_HEADER_ROW)
+    .getCell(templateCol).numFmt;
   const computedByRawDataRow = new Map<number, number>();
   const pendingWrites: Array<{ row: RawRow; value: number }> = [];
 
@@ -202,17 +205,24 @@ export async function convertTop10Master(
   let metersWritten = 0;
 
   for (const { row, value } of pendingWrites) {
-    const webRow = resolveWebSsRow(rowIndex, row.meter, row.location);
+    const webRow = resolveWebSsRowExcel(rowIndex, row.meter, row.location);
     if (webRow === null) {
       missingRows.push(
         `${row.meter} @ ${normalizeTop10Location(row.location)}`,
       );
       continue;
     }
-    sheet[XLSX.utils.encode_cell({ r: webRow, c: dateCol })] = {
-      t: "n",
-      v: value,
-    };
+    const cell = sheet.getRow(webRow).getCell(dateCol);
+    const templateCell = sheet.getRow(webRow).getCell(templateCol);
+    cell.value = value;
+    if (templateCell.style && Object.keys(templateCell.style).length > 0) {
+      cell.style = JSON.parse(JSON.stringify(templateCell.style));
+    }
+    if (templateCell.numFmt) {
+      cell.numFmt = templateCell.numFmt;
+    } else if (prevFmt) {
+      cell.numFmt = prevFmt;
+    }
     metersWritten += 1;
   }
 
@@ -229,23 +239,25 @@ export async function convertTop10Master(
   );
   const outdoorAvg = computeOutdoorTempC(input.rawCsvByLogicalId);
   if (outdoorRow && outdoorAvg !== null) {
-    const webRow = resolveWebSsRow(
+    const webRow = resolveWebSsRowExcel(
       rowIndex,
       outdoorRow.meter,
       outdoorRow.location,
     );
     if (webRow !== null) {
-      sheet[XLSX.utils.encode_cell({ r: webRow, c: dateCol })] = {
-        t: "n",
-        v: outdoorAvg,
-      };
+      const cell = sheet.getRow(webRow).getCell(dateCol);
+      const templateCell = sheet.getRow(webRow).getCell(templateCol);
+      cell.value = outdoorAvg;
+      if (templateCell.style && Object.keys(templateCell.style).length > 0) {
+        cell.style = JSON.parse(JSON.stringify(templateCell.style));
+      }
+      if (templateCell.numFmt) cell.numFmt = templateCell.numFmt;
       outdoorTempWritten = true;
       metersWritten += 1;
     }
   }
 
-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-  await writeFile(input.masterWorkbookPath, out);
+  await saveExcelWorkbook(workbook, input.masterWorkbookPath);
 
   return {
     dataDate: input.dataDate,

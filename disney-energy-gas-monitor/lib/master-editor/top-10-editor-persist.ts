@@ -1,6 +1,6 @@
+import type ExcelJS from "exceljs";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
-import * as XLSX from "xlsx";
 import bundled from "@/lib/raw-to-master/top-10-rawdata-rows.json";
 import { TOP10_MASTER_FILENAME } from "@/lib/raw-to-master/top-10";
 import {
@@ -8,7 +8,13 @@ import {
   top10RawDataRowsOverridePath,
   type Top10RawDataRow,
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
-import { WEBSS_SHEET_NAME } from "@/lib/raw-to-master/top-10-webss";
+import {
+  getWebSsSheet,
+} from "@/lib/raw-to-master/top-10-excel";
+import {
+  loadExcelWorkbook,
+  saveExcelWorkbook,
+} from "@/lib/raw-to-master/exceljs-preserve";
 import { clearSolarFeedInExemptionCache } from "@/lib/raw-csv-solar-exemptions";
 import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
 import { backupFilesForEdit } from "@/lib/master-editor/backup";
@@ -36,22 +42,18 @@ export function masterWorkbookPath(): string {
 }
 
 export async function readTop10Workbook(): Promise<{
-  workbook: XLSX.WorkBook;
-  sheet: XLSX.WorkSheet;
+  workbook: ExcelJS.Workbook;
+  sheet: ExcelJS.Worksheet;
   masterPath: string;
 }> {
   const masterPath = masterWorkbookPath();
-  const buffer = await readFile(masterPath);
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
-  const sheet = workbook.Sheets[WEBSS_SHEET_NAME];
-  if (!sheet) {
-    throw new Top10EditorError(`Missing sheet "${WEBSS_SHEET_NAME}"`);
-  }
+  const workbook = await loadExcelWorkbook(masterPath);
+  const sheet = getWebSsSheet(workbook);
   return { workbook, sheet, masterPath };
 }
 
 export async function persistTop10Edit(
-  workbook: XLSX.WorkBook,
+  workbook: ExcelJS.Workbook,
   mappingRows: Top10RawDataRow[],
 ): Promise<string> {
   const masterPath = masterWorkbookPath();
@@ -60,8 +62,7 @@ export async function persistTop10Edit(
     { label: TOP10_MASTER_FILENAME, absolutePath: masterPath },
     { label: "top-10-rawdata-rows.json", absolutePath: overridePath },
   ]);
-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-  await writeFile(masterPath, out);
+  await saveExcelWorkbook(workbook, masterPath);
   await writeFile(overridePath, JSON.stringify(mappingRows, null, 2), "utf-8");
   clearTop10RawDataRowsCache();
   clearSolarFeedInExemptionCache();

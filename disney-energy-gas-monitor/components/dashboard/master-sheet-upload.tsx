@@ -536,10 +536,12 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
         setEditExcelToken(trimmed);
         setExcelPickerOpen(true);
       } else if (purpose === "upload-files") {
+        pinUploadTokenForFollowUpSteps(trimmed);
         const pending = pendingUploadRef.current;
         pendingUploadRef.current = null;
         if (pending?.length) void uploadFiles(pending, undefined, trimmed);
       } else if (purpose === "upload-pick") {
+        pinUploadTokenForFollowUpSteps(trimmed);
         uploadActionTokenRef.current = trimmed;
         const pendingPick = pendingPickAwaitingAuthRef.current;
         pendingPickAwaitingAuthRef.current = null;
@@ -929,6 +931,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
       <GasManualEntryDialog
         request={gasManualEntry}
         uploadToken={gasManualSessionToken || uploadToken}
+        requiresUploadPassword={requiresToken}
         open={gasManualDialogOpen}
         onCompleted={(msg) => {
           setMessage(msg);

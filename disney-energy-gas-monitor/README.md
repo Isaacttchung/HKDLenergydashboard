@@ -203,7 +203,7 @@ Same behavior applies when uploading **four masters** (Mode B) if that date colu
 
 ### Top 10 master editor (phase 1)
 
-Sidebar **Edit Excels** opens a workbook/sheet picker (feed-in excluded), then the WebSS_Data editor for Top 10 when selected. Rename / insert / remove updates both `data/master-sheets/HKDL_Top_10.xlsx` and `data/master-schema/top-10-rawdata-rows.json` (created on first edit from the bundled mapping). Backups go to `data/master-editor-backups/<timestamp>/`. Uses the same upload token when `MASTER_SHEET_UPLOAD_TOKEN` is set.
+Sidebar **Edit Excels** opens a workbook/sheet picker (feed-in excluded), then the WebSS_Data editor for Top 10 when selected. Rename / insert / remove updates both `data/master-sheets/HKDL_Top_10.xlsx` and `data/master-schema/top-10-rawdata-rows.json` (created on first edit from the bundled mapping). The master save uses **ExcelJS** (same as Mode A) so charts, tab colors, and cell formats stay intact. Backups go to `data/master-editor-backups/<timestamp>/`. Uses the same upload token when `MASTER_SHEET_UPLOAD_TOKEN` is set.
 
 ### Out-of-sequence upload (soft warning, Mode A only)
 

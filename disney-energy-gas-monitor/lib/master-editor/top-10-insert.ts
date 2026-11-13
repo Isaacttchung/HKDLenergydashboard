@@ -1,20 +1,19 @@
 import { readFile } from "fs/promises";
-import * as XLSX from "xlsx";
 import {
   Top10EditorError,
   ensureMappingOverrideCopy,
   persistTop10Edit,
   readTop10Workbook,
 } from "@/lib/master-editor/top-10-editor-persist";
-import { insertSheetRowAfter } from "@/lib/master-editor/top-10-sheet-mutate";
+import { insertSheetRowAfterExcel } from "@/lib/master-editor/top-10-sheet-mutate-excel";
 import {
   getTop10RawDataRows,
   top10RawDataRowsOverridePath,
   type Top10RawDataRow,
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
 import { TOP10_LINK_ID_TO_LOGICAL_ID } from "@/lib/raw-to-master/top-10-link-map";
+import { buildWebSsRowIndexExcel } from "@/lib/raw-to-master/top-10-excel";
 import {
-  buildWebSsRowIndex,
   normalizeTop10Location,
   resolveWebSsRow,
   webSsRowKey,
@@ -147,7 +146,7 @@ export async function applyTop10Insert(
   options: { dryRun?: boolean } = {},
 ): Promise<{ preview: Top10InsertPreview; backupDir: string | null }> {
   const { workbook, sheet } = await readTop10Workbook();
-  const sheetIndex = buildWebSsRowIndex(sheet);
+  const sheetIndex = buildWebSsRowIndexExcel(sheet);
   const preview = planTop10Insert(input, getTop10RawDataRows(), sheetIndex);
 
   if (options.dryRun) {
@@ -180,15 +179,10 @@ export async function applyTop10Insert(
   }
   stored.splice(insertAt, 0, draft);
 
-  const newRow = insertSheetRowAfter(sheet, preview.anchorSheetRow);
-  sheet[XLSX.utils.encode_cell({ r: newRow, c: 0 })] = {
-    t: "s",
-    v: draft.meter,
-  };
-  sheet[XLSX.utils.encode_cell({ r: newRow, c: 1 })] = {
-    t: "s",
-    v: draft.location,
-  };
+  const newRow = insertSheetRowAfterExcel(sheet, preview.anchorSheetRow);
+  const row = sheet.getRow(newRow);
+  row.getCell(1).value = draft.meter;
+  row.getCell(2).value = draft.location;
 
   const backupDir = await persistTop10Edit(workbook, stored);
   return { preview: { ...preview, newSheetRow: newRow }, backupDir };

@@ -1,6 +1,4 @@
-import { readFile } from "fs/promises";
 import path from "path";
-import * as XLSX from "xlsx";
 import {
   getTop10RawDataRows,
   mappingSource,
@@ -8,10 +6,13 @@ import {
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
 import { TOP10_MASTER_FILENAME } from "@/lib/raw-to-master/top-10";
 import {
-  buildWebSsRowIndex,
+  buildWebSsRowIndexExcel,
+  getWebSsSheet,
+} from "@/lib/raw-to-master/top-10-excel";
+import { loadExcelWorkbook } from "@/lib/raw-to-master/exceljs-preserve";
+import {
   findMappingForWebSsRow,
   normalizeTop10Location,
-  WEBSS_SHEET_NAME,
 } from "@/lib/raw-to-master/top-10-webss";
 import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
 
@@ -34,14 +35,10 @@ export interface Top10EditorSchema {
 
 export async function loadTop10EditorSchema(): Promise<Top10EditorSchema> {
   const masterPath = path.join(MASTER_SHEETS_DIR, TOP10_MASTER_FILENAME);
-  const buffer = await readFile(masterPath);
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
-  const sheet = workbook.Sheets[WEBSS_SHEET_NAME];
-  if (!sheet) {
-    throw new Error(`Top_10 master missing sheet "${WEBSS_SHEET_NAME}"`);
-  }
+  const workbook = await loadExcelWorkbook(masterPath);
+  const sheet = getWebSsSheet(workbook);
 
-  const index = buildWebSsRowIndex(sheet);
+  const index = buildWebSsRowIndexExcel(sheet);
   const mappingRows = getTop10RawDataRows();
 
   const rows: Top10EditorRow[] = [];
@@ -51,10 +48,9 @@ export async function loadTop10EditorSchema(): Promise<Top10EditorSchema> {
     const meter = key.slice(0, pipe);
     const location = normalizeTop10Location(key.slice(pipe + 1));
     const mapping = findMappingForWebSsRow(index, sheetRow, mappingRows);
-    const displayMeter =
-      sheet[XLSX.utils.encode_cell({ r: sheetRow, c: 0 })]?.v ?? meter;
-    const displayLocation =
-      sheet[XLSX.utils.encode_cell({ r: sheetRow, c: 1 })]?.v ?? location;
+    const sheetCells = sheet.getRow(sheetRow);
+    const displayMeter = sheetCells.getCell(1).value ?? meter;
+    const displayLocation = sheetCells.getCell(2).value ?? location;
     const mapped = Boolean(mapping);
     if (!mapped) unmapped += 1;
     rows.push({

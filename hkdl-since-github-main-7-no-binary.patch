@@ -1,0 +1,546 @@
+diff --git a/disney-energy-gas-monitor/README.md b/disney-energy-gas-monitor/README.md
+index 625f1fc..34799e1 100644
+--- a/disney-energy-gas-monitor/README.md
++++ b/disney-energy-gas-monitor/README.md
+@@ -133,7 +133,7 @@ Users do **not** upload the internal formula workbook (`Formula-DailyWeb4.xlsm`)
+ | Master workbook | From raw data? | Notes |
+ |-----------------|----------------|-------|
+ | **HKDL_Top_10.xlsx** (`WebSS_Data`) | Yes | Mappings from RawData spec; outdoor air temperature from **`CCP+HCCP Daily1`** (column BY, daily average → row 301) |
+-| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_*** kWh columns; **Park Y** = outdoor temp (Daily1 BY); **Hotel P** / **Park AB** = 30-day formulas; **Park AA** = OPEN/CLOSE from **Z**; **Hotel O** + **Park Z** from gas manual step (occupancy + Atten) |
++| **HKDL_Power_Solar_consumption_report.xlsx** | Yes | **Mercury_*** columns from formula **CHHP** (`power-solar-mappings.ts`: import Δ + feed-in sum); **Park Y** = outdoor temp (Daily1 BY); **Hotel P** / **Park AB** = 30-day formulas; **Park AA** = OPEN/CLOSE from **Z**; **Hotel O** + **Park Z** from gas manual step (occupancy + Atten) |
+ | **HKDL Daily Feed-in Tariff Report.xlsx** | Uploaded as input | Required for solar / feed-in calculations; not produced from raws alone |
+ | **HCCP_Gas_Consumption_report.xlsx** | Yes (gas mode) | **HCCP Gas Capacity.csv** → Gas Meter Reading columns I/J/K |
+ 
+@@ -232,11 +232,13 @@ Conversion **completes** and the dashboard **updates** even when warnings fire.
+ | **CUMULATIVE_DECREASE** | Cumulative kWh decreased row-to-row (equal is OK) |
+ | **NEGATIVE_DELTA** | Daily total (last − first non-empty) is negative |
+ 
++**CHHP / solar import columns:** For meters mapped in formula **CHHP** with feed-in tariff columns (and Top_10 **RawData** solar rows with feed-in), a falling raw import register is expected when export exceeds load. Those columns are **not** listed under cumulative-decrease or negative-delta warnings (Power_Solar still writes **import Δ + feed-in sum** to the master).
++
+ Bad source data (for example known REC glitches) is **not** auto-corrected; fix manually and re-upload.
+ 
+ ### Default kWh rule
+ 
+-For each meter column: **last non-empty cumulative kWh − first non-empty cumulative kWh** for that day, unless a specific mapping uses REC or feed-in formulas (Top_10 / Power_Solar).
++For each meter column: **last non-empty cumulative kWh − first non-empty cumulative kWh** for that day, unless a specific mapping uses REC or feed-in formulas (Top_10 **RawData**; Power_Solar **CHHP** + feed-in tariff report).
+ 
+ ### Code locations (developers)
+ 
+diff --git a/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx b/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx
+index 5ecc3bc..9fe6d88 100644
+--- a/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx
+@@ -2,6 +2,7 @@
+ 
+ import { Button } from "@/components/ui/button";
+ import { computeHccpOverallOccupancy } from "@/lib/raw-to-master/hccp-gas-manual";
++import { readMasterSheetUploadToken } from "@/lib/upload/upload-token-session";
+ import { Loader2 } from "lucide-react";
+ import {
+   useEffect,
+@@ -101,11 +102,11 @@ export function GasManualEntryDialog({
+     }
+ 
+     try {
++      const token = (uploadToken || readMasterSheetUploadToken()).trim();
+       const headers: HeadersInit = { "Content-Type": "application/json" };
+-      if (uploadToken.trim()) {
+-        headers["x-upload-token"] = uploadToken.trim();
++      if (token) {
++        headers["x-upload-token"] = token;
+       }
+-      const token = uploadToken.trim();
+       const res = await fetch("/api/master-sheets/gas-manual-fields", {
+         method: "POST",
+         headers,
+diff --git a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+index a016141..5d02160 100644
+--- a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+@@ -13,6 +13,10 @@ import { UploadWarningsDialog } from "@/components/dashboard/upload-warnings-dia
+ import type { GasManualEntryRequest } from "@/components/dashboard/gas-manual-entry-dialog";
+ import type { MasterSheetUploadMeta } from "@/lib/master-sheet-upload-meta";
+ import { releaseStaleModalLocks } from "@/lib/release-stale-modal-locks";
++import {
++  clearMasterSheetUploadToken,
++  persistMasterSheetUploadToken,
++} from "@/lib/upload/upload-token-session";
+ import type { RawCsvWarning } from "@/lib/raw-csv-validation";
+ import type { DownloadableAfterWarning } from "@/lib/upload/downloadable-after-warnings";
+ import { EXPECTED_RAW_LOGICAL_IDS } from "@/lib/expected-raw-logical-ids";
+@@ -128,8 +132,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+   const [gasManualEntry, setGasManualEntry] =
+     useState<GasManualEntryRequest | null>(null);
+   const [gasManualDialogOpen, setGasManualDialogOpen] = useState(false);
++  const [gasManualSessionToken, setGasManualSessionToken] = useState("");
+   const pendingGasManualRef = useRef<GasManualEntryRequest | null>(null);
+-  const gasManualUploadTokenRef = useRef<string>("");
++  const lastUploadAuthTokenRef = useRef("");
+ 
+   const loadStatus = useCallback(() => {
+     fetch("/api/master-sheets/upload")
+@@ -153,19 +158,21 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+ 
+   const clearUploadActionToken = useCallback(() => {
+     uploadActionTokenRef.current = null;
+-    gasManualUploadTokenRef.current = "";
++    lastUploadAuthTokenRef.current = "";
++    setGasManualSessionToken("");
++    clearMasterSheetUploadToken();
+     setUploadToken("");
+   }, []);
+ 
+-  const rememberUploadTokenForGasManual = useCallback(() => {
+-    const token =
+-      uploadActionTokenRef.current?.trim() || uploadToken.trim();
+-    if (token) {
+-      gasManualUploadTokenRef.current = token;
+-      setUploadToken(token);
+-      uploadActionTokenRef.current = token;
+-    }
+-  }, [uploadToken]);
++  const pinUploadTokenForFollowUpSteps = useCallback((token: string) => {
++    const trimmed = token.trim();
++    if (!trimmed) return;
++    lastUploadAuthTokenRef.current = trimmed;
++    uploadActionTokenRef.current = trimmed;
++    setUploadToken(trimmed);
++    persistMasterSheetUploadToken(trimmed);
++    setGasManualSessionToken(trimmed);
++  }, []);
+ 
+   const clearEditExcelToken = useCallback(() => {
+     setEditExcelToken("");
+@@ -245,8 +252,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+       uploadActionTokenRef.current?.trim() ??
+       uploadToken.trim();
+     if (token) {
+-      uploadActionTokenRef.current = token;
+-      setUploadToken(token);
++      pinUploadTokenForFollowUpSteps(token);
+       form.append("uploadToken", token);
+     }
+     if (replaceExisting) {
+@@ -383,7 +389,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+         setDownloadableAfterWarnings([]);
+         setWarningsDialogOpen(false);
+         if (gasEntry) {
+-          rememberUploadTokenForGasManual();
++          pinUploadTokenForFollowUpSteps(
++            lastUploadAuthTokenRef.current || token || "",
++          );
+           setGasManualEntry(gasEntry);
+           setGasManualDialogOpen(true);
+         } else {
+@@ -906,7 +914,9 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+           setWarningsDialogOpen(false);
+           const pending = pendingGasManualRef.current;
+           if (pending) {
+-            rememberUploadTokenForGasManual();
++            pinUploadTokenForFollowUpSteps(
++              lastUploadAuthTokenRef.current || uploadToken || "",
++            );
+             setGasManualEntry(pending);
+             setGasManualDialogOpen(true);
+             pendingGasManualRef.current = null;
+@@ -918,7 +928,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+ 
+       <GasManualEntryDialog
+         request={gasManualEntry}
+-        uploadToken={gasManualUploadTokenRef.current || uploadToken}
++        uploadToken={gasManualSessionToken || uploadToken}
+         open={gasManualDialogOpen}
+         onCompleted={(msg) => {
+           setMessage(msg);
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts
+index 5e919c3..a47dc32 100644
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts
+@@ -9,6 +9,7 @@ import {
+   type Top10RawDataRow,
+ } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+ import { WEBSS_SHEET_NAME } from "@/lib/raw-to-master/top-10-webss";
++import { clearSolarFeedInExemptionCache } from "@/lib/raw-csv-solar-exemptions";
+ import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
+ import { backupFilesForEdit } from "@/lib/master-editor/backup";
+ 
+@@ -63,5 +64,6 @@ export async function persistTop10Edit(
+   await writeFile(masterPath, out);
+   await writeFile(overridePath, JSON.stringify(mappingRows, null, 2), "utf-8");
+   clearTop10RawDataRowsCache();
++  clearSolarFeedInExemptionCache();
+   return backupDir;
+ }
+diff --git a/disney-energy-gas-monitor/lib/raw-csv-solar-exemptions.ts b/disney-energy-gas-monitor/lib/raw-csv-solar-exemptions.ts
+new file mode 100644
+index 0000000..e15c6d6
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/raw-csv-solar-exemptions.ts
+@@ -0,0 +1,65 @@
++import rawDataRows from "@/lib/raw-to-master/top-10-rawdata-rows.json";
++import { excelColumnLetterToIndex } from "@/lib/raw-to-master/excel-date";
++import {
++  MERCURY_RAW_LOGICAL_IDS,
++  POWER_SOLAR_METER_MAPPINGS,
++  type MercuryRawLogicalId,
++} from "@/lib/raw-to-master/power-solar-mappings";
++import { TOP10_LINK_ID_TO_LOGICAL_ID } from "@/lib/raw-to-master/top-10-link-map";
++
++function columnExemptionKey(logicalId: string, columnIndex: number): string {
++  return `${logicalId}|${columnIndex}`;
++}
++
++let cachedExemptColumns: Set<string> | null = null;
++
++/**
++ * Columns whose raw cumulative may decrease when onsite solar exports to the grid.
++ * CHHP meters: Formula CHHP **Feed-in** column (tariff sheet letters).
++ * Top_10 meters: RawData solar rows with **feedInTariffColumns**.
++ */
++export function buildSolarFeedInExemptColumns(): Set<string> {
++  const exempt = new Set<string>();
++
++  for (const mapping of POWER_SOLAR_METER_MAPPINGS) {
++    if (mapping.feedInTariffColumns.length === 0) continue;
++    const colIndex = excelColumnLetterToIndex(mapping.rawColumnLetter);
++    exempt.add(columnExemptionKey(mapping.rawLogicalId, colIndex));
++  }
++
++  for (const row of rawDataRows) {
++    if (row.kind !== "solar" || row.feedInTariffColumns.length === 0) continue;
++    if (!row.importRef) continue;
++    const logicalId = TOP10_LINK_ID_TO_LOGICAL_ID[row.importRef.link];
++    if (!logicalId) continue;
++    const colIndex = excelColumnLetterToIndex(row.importRef.col);
++    exempt.add(columnExemptionKey(logicalId, colIndex));
++  }
++
++  return exempt;
++}
++
++function exemptColumns(): Set<string> {
++  if (!cachedExemptColumns) {
++    cachedExemptColumns = buildSolarFeedInExemptColumns();
++  }
++  return cachedExemptColumns;
++}
++
++/** Clear after tests or mapping config reload (Top 10 editor). */
++export function clearSolarFeedInExemptionCache(): void {
++  cachedExemptColumns = null;
++}
++
++export function isSolarFeedInLinkedRawColumn(
++  fileLogicalId: string,
++  columnIndex: number,
++): boolean {
++  return exemptColumns().has(columnExemptionKey(fileLogicalId, columnIndex));
++}
++
++export function isMercuryRawLogicalId(
++  id: string,
++): id is MercuryRawLogicalId {
++  return (MERCURY_RAW_LOGICAL_IDS as readonly string[]).includes(id);
++}
+diff --git a/disney-energy-gas-monitor/lib/raw-csv-validation.test.ts b/disney-energy-gas-monitor/lib/raw-csv-validation.test.ts
+index d09b3c9..0e32f08 100644
+--- a/disney-energy-gas-monitor/lib/raw-csv-validation.test.ts
++++ b/disney-energy-gas-monitor/lib/raw-csv-validation.test.ts
+@@ -81,6 +81,31 @@ describe("validateRawCsvContent — synthetic violations", () => {
+     assert.ok(neg[0].column.includes("MeterA"));
+   });
+ 
++  it("skips NEGATIVE_DELTA and CUMULATIVE_DECREASE on CHHP solar Mercury columns", () => {
++    const pad = ",pad#Real Energy#kWh".repeat(5);
++    const csv = [
++      `Timestamp${pad},Hotel.SS303B_Tx_D2#Real Energy#kWh,Plain.Meter#Real Energy#kWh`,
++      `2026-10-26 00:15:00${",0".repeat(5)},5058248.5,100`,
++      `2026-10-26 00:30:00${",0".repeat(5)},5058000,90`,
++      `2026-10-26 00:45:00${",0".repeat(5)},5057446.5,85`,
++    ].join("\n");
++    const warnings = validateRawCsvContent(csv, {
++      fileLabel: "Mercury_HCCP",
++    });
++    const solarCodes = warnings.filter(
++      (w) =>
++        w.code === "NEGATIVE_DELTA" || w.code === "CUMULATIVE_DECREASE",
++    );
++    assert.equal(
++      solarCodes.filter((w) => w.column.includes("SS303B")).length,
++      0,
++    );
++    assert.ok(
++      solarCodes.some((w) => w.column.includes("Plain")),
++      "non-solar columns still warned",
++    );
++  });
++
+   it("flags LOW_DATA_COUNT below threshold", () => {
+     const rows = [
+       "Timestamp,Site.MeterA#Real Energy#kWh",
+diff --git a/disney-energy-gas-monitor/lib/raw-csv-validation.ts b/disney-energy-gas-monitor/lib/raw-csv-validation.ts
+index 3ce7f63..1ba0827 100644
+--- a/disney-energy-gas-monitor/lib/raw-csv-validation.ts
++++ b/disney-energy-gas-monitor/lib/raw-csv-validation.ts
+@@ -1,4 +1,5 @@
+ import Papa from "papaparse";
++import { isSolarFeedInLinkedRawColumn } from "@/lib/raw-csv-solar-exemptions";
+ 
+ export type RawCsvWarningCode =
+   | "CUMULATIVE_DECREASE"
+@@ -90,7 +91,13 @@ export function validateRawCsvContent(
+     const hasNumeric = numericByRow.some((v) => v !== null);
+     if (!hasNumeric) continue;
+ 
++    const skipSolarImportWarnings = isSolarFeedInLinkedRawColumn(
++      fileLabel,
++      col,
++    );
++
+     for (let r = 0; r < numericByRow.length - 1; r += 1) {
++      if (skipSolarImportWarnings) continue;
+       const current = numericByRow[r];
+       const next = numericByRow[r + 1];
+       if (current === null || next === null) continue;
+@@ -109,7 +116,11 @@ export function validateRawCsvContent(
+     }
+ 
+     const fl = firstLastNonEmpty(numericByRow);
+-    if (fl && fl.last - fl.first < 0) {
++    if (
++      !skipSolarImportWarnings &&
++      fl &&
++      fl.last - fl.first < 0
++    ) {
+       warnings.push({
+         code: "NEGATIVE_DELTA",
+         file: fileLabel,
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/chhp-mappings-sync.test.ts b/disney-energy-gas-monitor/lib/raw-to-master/chhp-mappings-sync.test.ts
+new file mode 100644
+index 0000000..d2481af
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/raw-to-master/chhp-mappings-sync.test.ts
+@@ -0,0 +1,66 @@
++import assert from "node:assert/strict";
++import { existsSync, readFileSync } from "node:fs";
++import path from "node:path";
++import { test } from "node:test";
++import * as XLSX from "xlsx";
++import {
++  chhpRowKey,
++  parseChhpSheet,
++} from "@/lib/raw-to-master/parse-chhp-sheet";
++import { POWER_SOLAR_METER_MAPPINGS } from "@/lib/raw-to-master/power-solar-mappings";
++
++const FORMULA_FIXTURES = [
++  path.join(process.cwd(), "test/fixtures/Formula-DailyWeb4.xlsm"),
++  "/home/ubuntu/.cursor/projects/workspace/uploads/Formula_-_DailyWeb4_54f6.xlsm",
++];
++
++function resolveFormulaWorkbookPath(): string | null {
++  for (const candidate of FORMULA_FIXTURES) {
++    if (existsSync(candidate)) return candidate;
++  }
++  return null;
++}
++
++test("POWER_SOLAR_METER_MAPPINGS stays in sync with Formula-DailyWeb4 CHHP sheet", () => {
++  const workbookPath = resolveFormulaWorkbookPath();
++  if (!workbookPath) {
++    console.log("skip: Formula-DailyWeb4.xlsm not on disk");
++    return;
++  }
++
++  const workbook = XLSX.read(readFileSync(workbookPath), {
++    type: "buffer",
++    cellFormula: true,
++  });
++  const fromChhp = parseChhpSheet(workbook);
++  const chhpByKey = new Map(fromChhp.map((row) => [chhpRowKey(row), row]));
++  const codeByKey = new Map(
++    POWER_SOLAR_METER_MAPPINGS.map((row) => [chhpRowKey(row), row]),
++  );
++
++  assert.equal(
++    fromChhp.length,
++    POWER_SOLAR_METER_MAPPINGS.length,
++    "CHHP row count vs baked mappings",
++  );
++
++  for (const row of fromChhp) {
++    const key = chhpRowKey(row);
++    const baked = codeByKey.get(key);
++    assert.ok(baked, `missing baked mapping for CHHP row ${key}`);
++    assert.deepEqual(
++      baked.feedInTariffColumns,
++      row.feedInTariffColumns,
++      `feed-in columns for ${row.chhpMeterId}`,
++    );
++    assert.equal(
++      baked.rawColumnLetter,
++      row.rawColumnLetter,
++      `Mercury column for ${row.chhpMeterId}`,
++    );
++  }
++
++  for (const row of POWER_SOLAR_METER_MAPPINGS) {
++    assert.ok(chhpByKey.has(chhpRowKey(row)), `extra baked row ${row.chhpMeterId}`);
++  }
++});
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/parse-chhp-sheet.ts b/disney-energy-gas-monitor/lib/raw-to-master/parse-chhp-sheet.ts
+new file mode 100644
+index 0000000..7395311
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/raw-to-master/parse-chhp-sheet.ts
+@@ -0,0 +1,114 @@
++import type { WorkBook } from "xlsx";
++import * as XLSX from "xlsx";
++import type {
++  MercuryRawLogicalId,
++  PowerSolarArea,
++  PowerSolarMeterMapping,
++} from "@/lib/raw-to-master/power-solar-mappings";
++
++const CHHP_SHEET = "CHHP";
++
++/** Formula-DailyWeb4 external link index on CHHP rows (not Top_10 RawData link ids). */
++const CHHP_LINK_TO_MERCURY: Record<number, MercuryRawLogicalId> = {
++  1: "Mercury_CCP",
++  3: "Mercury_HCCP",
++  4: "Mercury_Hotel",
++  5: "Mercury_Park",
++};
++
++export interface ParsedChhpRow {
++  area: PowerSolarArea;
++  chhpMeterId: string;
++  rawLogicalId: MercuryRawLogicalId;
++  rawColumnLetter: string;
++  feedInTariffColumns: string[];
++}
++
++function colLetterFromMercuryFormula(formula: string | undefined): string | null {
++  if (!formula) return null;
++  const match = formula.match(/Mercury_\w+!([A-Z]+):/);
++  return match ? match[1] : null;
++}
++
++function linkIndexFromMercuryFormula(formula: string | undefined): number | null {
++  if (!formula) return null;
++  const match = formula.match(/\[(\d+)\]/);
++  return match ? Number(match[1]) : null;
++}
++
++function parseFeedInList(cell: unknown): string[] {
++  return String(cell ?? "")
++    .split(/[,，]/)
++    .map((part) => part.trim())
++    .filter(Boolean);
++}
++
++function isAreaBannerRow(row: unknown[]): PowerSolarArea | null {
++  const label = String(row[0] ?? "").trim();
++  if (label === "1st") return null;
++  if (
++    (label === "CCP" ||
++      label === "HCCP" ||
++      label === "Hotel" ||
++      label === "Park") &&
++    String(row[1]).trim() === "1st"
++  ) {
++    return label;
++  }
++  return null;
++}
++
++/**
++ * Parse Formula-DailyWeb4 **CHHP** sheet: Mercury column + feed-in tariff letters.
++ * Master column headers are not on CHHP; merge with existing mappings when refreshing.
++ */
++export function parseChhpSheet(workbook: WorkBook): ParsedChhpRow[] {
++  const sheet = workbook.Sheets[CHHP_SHEET];
++  if (!sheet) {
++    throw new Error(`Formula workbook missing sheet "${CHHP_SHEET}"`);
++  }
++
++  const rows = XLSX.utils.sheet_to_json(sheet, {
++    header: 1,
++    defval: "",
++  }) as unknown[][];
++
++  let area: PowerSolarArea | null = null;
++  const parsed: ParsedChhpRow[] = [];
++
++  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
++    const row = rows[rowIndex];
++    const banner = isAreaBannerRow(row);
++    if (banner) {
++      area = banner;
++      continue;
++    }
++    if (!area) continue;
++
++    const chhpMeterId = String(row[0] ?? "").trim();
++    if (!chhpMeterId || chhpMeterId === "1st") continue;
++
++    const firstCell = sheet[XLSX.utils.encode_cell({ r: rowIndex, c: 1 })];
++    const formula = typeof firstCell?.f === "string" ? firstCell.f : undefined;
++    if (!formula) continue;
++
++    const link = linkIndexFromMercuryFormula(formula);
++    const rawLogicalId = link ? CHHP_LINK_TO_MERCURY[link] : undefined;
++    const rawColumnLetter = colLetterFromMercuryFormula(formula);
++    if (!rawLogicalId || !rawColumnLetter) continue;
++
++    parsed.push({
++      area,
++      chhpMeterId,
++      rawLogicalId,
++      rawColumnLetter,
++      feedInTariffColumns: parseFeedInList(row[9]),
++    });
++  }
++
++  return parsed;
++}
++
++export function chhpRowKey(row: ParsedChhpRow | PowerSolarMeterMapping): string {
++  return `${row.area}|${row.rawLogicalId}|${row.rawColumnLetter}|${row.chhpMeterId}`;
++}
+diff --git a/disney-energy-gas-monitor/lib/upload/upload-token-session.ts b/disney-energy-gas-monitor/lib/upload/upload-token-session.ts
+new file mode 100644
+index 0000000..19a22ef
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/upload/upload-token-session.ts
+@@ -0,0 +1,17 @@
++const STORAGE_KEY = "hkdl.master-sheet-upload-token";
++
++export function persistMasterSheetUploadToken(token: string): void {
++  const trimmed = token.trim();
++  if (!trimmed || typeof sessionStorage === "undefined") return;
++  sessionStorage.setItem(STORAGE_KEY, trimmed);
++}
++
++export function readMasterSheetUploadToken(): string {
++  if (typeof sessionStorage === "undefined") return "";
++  return sessionStorage.getItem(STORAGE_KEY)?.trim() ?? "";
++}
++
++export function clearMasterSheetUploadToken(): void {
++  if (typeof sessionStorage === "undefined") return;
++  sessionStorage.removeItem(STORAGE_KEY);
++}
+diff --git a/disney-energy-gas-monitor/test/fixtures/.gitignore b/disney-energy-gas-monitor/test/fixtures/.gitignore
+new file mode 100644
+index 0000000..a7c6dcd
+--- /dev/null
++++ b/disney-energy-gas-monitor/test/fixtures/.gitignore
+@@ -0,0 +1 @@
++*.xlsm
+diff --git a/disney-energy-gas-monitor/test/fixtures/README.md b/disney-energy-gas-monitor/test/fixtures/README.md
+new file mode 100644
+index 0000000..cdfae70
+--- /dev/null
++++ b/disney-energy-gas-monitor/test/fixtures/README.md
+@@ -0,0 +1 @@
++Optional: place `Formula-DailyWeb4.xlsm` here locally to run the CHHP sync test (`lib/raw-to-master/chhp-mappings-sync.test.ts`). The dashboard does not load this file at runtime.
