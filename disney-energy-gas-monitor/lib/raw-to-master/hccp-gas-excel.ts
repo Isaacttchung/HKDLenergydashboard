@@ -1,5 +1,8 @@
 import ExcelJS from "exceljs";
-import { readFile, writeFile } from "fs/promises";
+import {
+  loadExcelWorkbook,
+  saveExcelWorkbook,
+} from "@/lib/raw-to-master/exceljs-preserve";
 import { excelSerialToDate } from "@/lib/datastore/parsers/excel-utils";
 import { isoDateToExcelSerial } from "@/lib/raw-to-master/excel-date";
 import {
@@ -157,23 +160,8 @@ export function writeGasManualFieldsOnRow(
   };
 }
 
-export async function loadGasMeterWorkbook(
-  masterWorkbookPath: string,
-): Promise<ExcelJS.Workbook> {
-  const buffer = await readFile(masterWorkbookPath);
-  const workbook = new ExcelJS.Workbook();
-  // exceljs typings declare their own Buffer (extends ArrayBuffer), not Node's Buffer.
-  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
-  return workbook;
-}
-
-export async function saveGasMeterWorkbook(
-  workbook: ExcelJS.Workbook,
-  masterWorkbookPath: string,
-): Promise<void> {
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  await writeFile(masterWorkbookPath, buffer);
-}
+export const loadGasMeterWorkbook = loadExcelWorkbook;
+export const saveGasMeterWorkbook = saveExcelWorkbook;
 
 export function getGasMeterSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet {
   const sheet = workbook.getWorksheet("Gas Meter Reading");

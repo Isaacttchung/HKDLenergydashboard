@@ -1,0 +1,1355 @@
+diff --git a/disney-energy-gas-monitor/README.md b/disney-energy-gas-monitor/README.md
+index 34799e1..f53e2d3 100644
+--- a/disney-energy-gas-monitor/README.md
++++ b/disney-energy-gas-monitor/README.md
+@@ -203,7 +203,7 @@ Same behavior applies when uploading **four masters** (Mode B) if that date colu
+ 
+ ### Top 10 master editor (phase 1)
+ 
+-Sidebar **Edit Excels** opens a workbook/sheet picker (feed-in excluded), then the WebSS_Data editor for Top 10 when selected. Rename / insert / remove updates both `data/master-sheets/HKDL_Top_10.xlsx` and `data/master-schema/top-10-rawdata-rows.json` (created on first edit from the bundled mapping). Backups go to `data/master-editor-backups/<timestamp>/`. Uses the same upload token when `MASTER_SHEET_UPLOAD_TOKEN` is set.
++Sidebar **Edit Excels** opens a workbook/sheet picker (feed-in excluded), then the WebSS_Data editor for Top 10 when selected. Rename / insert / remove updates both `data/master-sheets/HKDL_Top_10.xlsx` and `data/master-schema/top-10-rawdata-rows.json` (created on first edit from the bundled mapping). The master save uses **ExcelJS** (same as Mode A) so charts, tab colors, and cell formats stay intact. Backups go to `data/master-editor-backups/<timestamp>/`. Uses the same upload token when `MASTER_SHEET_UPLOAD_TOKEN` is set.
+ 
+ ### Out-of-sequence upload (soft warning, Mode A only)
+ 
+diff --git a/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx b/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx
+index 9fe6d88..f906a19 100644
+--- a/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/gas-manual-entry-dialog.tsx
+@@ -2,7 +2,10 @@
+ 
+ import { Button } from "@/components/ui/button";
+ import { computeHccpOverallOccupancy } from "@/lib/raw-to-master/hccp-gas-manual";
+-import { readMasterSheetUploadToken } from "@/lib/upload/upload-token-session";
++import {
++  persistMasterSheetUploadToken,
++  readMasterSheetUploadToken,
++} from "@/lib/upload/upload-token-session";
+ import { Loader2 } from "lucide-react";
+ import {
+   useEffect,
+@@ -20,6 +23,8 @@ export interface GasManualEntryRequest {
+ interface GasManualEntryDialogProps {
+   request: GasManualEntryRequest | null;
+   uploadToken: string;
++  /** Host has `MASTER_SHEET_UPLOAD_TOKEN` — show password field when the upload token was not kept. */
++  requiresUploadPassword?: boolean;
+   open: boolean;
+   onCompleted: (message: string) => void;
+   onDismiss: () => void;
+@@ -38,6 +43,7 @@ type FieldKey = (typeof FIELDS)[number]["key"];
+ export function GasManualEntryDialog({
+   request,
+   uploadToken,
++  requiresUploadPassword = false,
+   open,
+   onCompleted,
+   onDismiss,
+@@ -53,6 +59,8 @@ export function GasManualEntryDialog({
+   });
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string | null>(null);
++  const [uploadPassword, setUploadPassword] = useState("");
++  const [showPasswordField, setShowPasswordField] = useState(false);
+ 
+   useEffect(() => {
+     const el = dialogRef.current;
+@@ -74,9 +82,17 @@ export function GasManualEntryDialog({
+         atten: "",
+       });
+       setError(null);
++      setUploadPassword("");
++      setShowPasswordField(false);
+     }
+   }, [open, request?.consumptionDate]);
+ 
++  useEffect(() => {
++    if (!open || !requiresUploadPassword) return;
++    const existing = (uploadToken || readMasterSheetUploadToken()).trim();
++    setShowPasswordField(!existing);
++  }, [open, requiresUploadPassword, uploadToken]);
++
+   const previewOverall = useMemo(() => {
+     const dlh = Number(values.dlhOccupancy);
+     const del = Number(values.delOccupancy);
+@@ -102,7 +118,20 @@ export function GasManualEntryDialog({
+     }
+ 
+     try {
+-      const token = (uploadToken || readMasterSheetUploadToken()).trim();
++      const token = (
++        uploadToken ||
++        readMasterSheetUploadToken() ||
++        uploadPassword
++      ).trim();
++      if (requiresUploadPassword && !token) {
++        setShowPasswordField(true);
++        setError("Enter the host upload password to save manual gas fields.");
++        setSaving(false);
++        return;
++      }
++      if (token) {
++        persistMasterSheetUploadToken(token);
++      }
+       const headers: HeadersInit = { "Content-Type": "application/json" };
+       if (token) {
+         headers["x-upload-token"] = token;
+@@ -118,7 +147,14 @@ export function GasManualEntryDialog({
+       });
+       const json = await res.json();
+       if (!res.ok) {
+-        setError(json.error ?? "Could not save gas manual fields");
++        if (res.status === 401) {
++          setShowPasswordField(true);
++          setError(
++            "Invalid upload password — enter the same password you used for the dropbox upload.",
++          );
++        } else {
++          setError(json.error ?? "Could not save gas manual fields");
++        }
+         return;
+       }
+       onCompleted(
+@@ -191,6 +227,23 @@ export function GasManualEntryDialog({
+             </span>
+           )}
+         </div>
++        {showPasswordField && (
++          <FieldGroup
++            label="Upload password"
++            id={`${formId}-upload-password`}
++          >
++            <input
++              id={`${formId}-upload-password`}
++              type="password"
++              autoComplete="current-password"
++              disabled={saving}
++              value={uploadPassword}
++              onChange={(e) => setUploadPassword(e.target.value)}
++              placeholder="Same as Excel/Raw Data Dropbox"
++              className="w-full rounded-md border border-brand-border px-2 py-1.5 text-sm"
++            />
++          </FieldGroup>
++        )}
+         {error && (
+           <p className="text-xs text-red-600" role="alert">
+             {error}
+diff --git a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+index 5d02160..b7d3b18 100644
+--- a/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
++++ b/disney-energy-gas-monitor/components/dashboard/master-sheet-upload.tsx
+@@ -536,10 +536,12 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+         setEditExcelToken(trimmed);
+         setExcelPickerOpen(true);
+       } else if (purpose === "upload-files") {
++        pinUploadTokenForFollowUpSteps(trimmed);
+         const pending = pendingUploadRef.current;
+         pendingUploadRef.current = null;
+         if (pending?.length) void uploadFiles(pending, undefined, trimmed);
+       } else if (purpose === "upload-pick") {
++        pinUploadTokenForFollowUpSteps(trimmed);
+         uploadActionTokenRef.current = trimmed;
+         const pendingPick = pendingPickAwaitingAuthRef.current;
+         pendingPickAwaitingAuthRef.current = null;
+@@ -929,6 +931,7 @@ export function MasterSheetUpload({ onUploadSuccess }: MasterSheetUploadProps) {
+       <GasManualEntryDialog
+         request={gasManualEntry}
+         uploadToken={gasManualSessionToken || uploadToken}
++        requiresUploadPassword={requiresToken}
+         open={gasManualDialogOpen}
+         onCompleted={(msg) => {
+           setMessage(msg);
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-excel-preserve.test.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-excel-preserve.test.ts
+new file mode 100644
+index 0000000..b244721
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-excel-preserve.test.ts
+@@ -0,0 +1,55 @@
++import assert from "node:assert/strict";
++import { copyFileSync, mkdtempSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { test } from "node:test";
++import { insertSheetRowAfterExcel } from "@/lib/master-editor/top-10-sheet-mutate-excel";
++import {
++  loadExcelWorkbook,
++  saveExcelWorkbook,
++} from "@/lib/raw-to-master/exceljs-preserve";
++import {
++  buildWebSsRowIndexExcel,
++  getWebSsSheet,
++} from "@/lib/raw-to-master/top-10-excel";
++
++const MASTER = join(
++  process.cwd(),
++  "data/master-sheets/HKDL_Top_10.xlsx",
++);
++
++test("insert row preserves workbook sheets and date column formatting", async () => {
++  const dir = mkdtempSync(join(tmpdir(), "t10-editor-"));
++  const copyPath = join(dir, "HKDL_Top_10.xlsx");
++  copyFileSync(MASTER, copyPath);
++
++  const beforeWb = await loadExcelWorkbook(copyPath);
++  const sheetNamesBefore = beforeWb.worksheets.map((w) => w.name);
++
++  const wb = await loadExcelWorkbook(copyPath);
++  const sheet = getWebSsSheet(wb);
++  const index = buildWebSsRowIndexExcel(sheet);
++  const anchorRow = [...index.values()].sort((a, b) => a - b)[0]!;
++  const sampleNumFmt = sheet.getRow(anchorRow).getCell(3).numFmt;
++
++  const newRow = insertSheetRowAfterExcel(sheet, anchorRow);
++  sheet.getRow(newRow).getCell(1).value = "CURSOR_TEST_METER";
++  sheet.getRow(newRow).getCell(2).value = "Test location";
++
++  await saveExcelWorkbook(wb, copyPath);
++
++  const afterWb = await loadExcelWorkbook(copyPath);
++  assert.deepEqual(
++    afterWb.worksheets.map((w) => w.name),
++    sheetNamesBefore,
++  );
++  const afterSheet = getWebSsSheet(afterWb);
++  assert.equal(
++    afterSheet.getRow(newRow).getCell(1).value,
++    "CURSOR_TEST_METER",
++  );
++  const newRowNumFmt = afterSheet.getRow(newRow).getCell(3).numFmt;
++  if (sampleNumFmt) {
++    assert.equal(newRowNumFmt, sampleNumFmt);
++  }
++});
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts
+index a47dc32..c684668 100644
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-persist.ts
+@@ -1,6 +1,6 @@
++import type ExcelJS from "exceljs";
+ import { mkdir, readFile, writeFile } from "fs/promises";
+ import path from "path";
+-import * as XLSX from "xlsx";
+ import bundled from "@/lib/raw-to-master/top-10-rawdata-rows.json";
+ import { TOP10_MASTER_FILENAME } from "@/lib/raw-to-master/top-10";
+ import {
+@@ -8,7 +8,13 @@ import {
+   top10RawDataRowsOverridePath,
+   type Top10RawDataRow,
+ } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+-import { WEBSS_SHEET_NAME } from "@/lib/raw-to-master/top-10-webss";
++import {
++  getWebSsSheet,
++} from "@/lib/raw-to-master/top-10-excel";
++import {
++  loadExcelWorkbook,
++  saveExcelWorkbook,
++} from "@/lib/raw-to-master/exceljs-preserve";
+ import { clearSolarFeedInExemptionCache } from "@/lib/raw-csv-solar-exemptions";
+ import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
+ import { backupFilesForEdit } from "@/lib/master-editor/backup";
+@@ -36,22 +42,18 @@ export function masterWorkbookPath(): string {
+ }
+ 
+ export async function readTop10Workbook(): Promise<{
+-  workbook: XLSX.WorkBook;
+-  sheet: XLSX.WorkSheet;
++  workbook: ExcelJS.Workbook;
++  sheet: ExcelJS.Worksheet;
+   masterPath: string;
+ }> {
+   const masterPath = masterWorkbookPath();
+-  const buffer = await readFile(masterPath);
+-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+-  const sheet = workbook.Sheets[WEBSS_SHEET_NAME];
+-  if (!sheet) {
+-    throw new Top10EditorError(`Missing sheet "${WEBSS_SHEET_NAME}"`);
+-  }
++  const workbook = await loadExcelWorkbook(masterPath);
++  const sheet = getWebSsSheet(workbook);
+   return { workbook, sheet, masterPath };
+ }
+ 
+ export async function persistTop10Edit(
+-  workbook: XLSX.WorkBook,
++  workbook: ExcelJS.Workbook,
+   mappingRows: Top10RawDataRow[],
+ ): Promise<string> {
+   const masterPath = masterWorkbookPath();
+@@ -60,8 +62,7 @@ export async function persistTop10Edit(
+     { label: TOP10_MASTER_FILENAME, absolutePath: masterPath },
+     { label: "top-10-rawdata-rows.json", absolutePath: overridePath },
+   ]);
+-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+-  await writeFile(masterPath, out);
++  await saveExcelWorkbook(workbook, masterPath);
+   await writeFile(overridePath, JSON.stringify(mappingRows, null, 2), "utf-8");
+   clearTop10RawDataRowsCache();
+   clearSolarFeedInExemptionCache();
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-schema.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-schema.ts
+index 19f5c1e..e8358f0 100644
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-editor-schema.ts
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-editor-schema.ts
+@@ -1,6 +1,4 @@
+-import { readFile } from "fs/promises";
+ import path from "path";
+-import * as XLSX from "xlsx";
+ import {
+   getTop10RawDataRows,
+   mappingSource,
+@@ -8,10 +6,13 @@ import {
+ } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+ import { TOP10_MASTER_FILENAME } from "@/lib/raw-to-master/top-10";
+ import {
+-  buildWebSsRowIndex,
++  buildWebSsRowIndexExcel,
++  getWebSsSheet,
++} from "@/lib/raw-to-master/top-10-excel";
++import { loadExcelWorkbook } from "@/lib/raw-to-master/exceljs-preserve";
++import {
+   findMappingForWebSsRow,
+   normalizeTop10Location,
+-  WEBSS_SHEET_NAME,
+ } from "@/lib/raw-to-master/top-10-webss";
+ import { MASTER_SHEETS_DIR } from "@/lib/master-sheets-config";
+ 
+@@ -34,14 +35,10 @@ export interface Top10EditorSchema {
+ 
+ export async function loadTop10EditorSchema(): Promise<Top10EditorSchema> {
+   const masterPath = path.join(MASTER_SHEETS_DIR, TOP10_MASTER_FILENAME);
+-  const buffer = await readFile(masterPath);
+-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+-  const sheet = workbook.Sheets[WEBSS_SHEET_NAME];
+-  if (!sheet) {
+-    throw new Error(`Top_10 master missing sheet "${WEBSS_SHEET_NAME}"`);
+-  }
++  const workbook = await loadExcelWorkbook(masterPath);
++  const sheet = getWebSsSheet(workbook);
+ 
+-  const index = buildWebSsRowIndex(sheet);
++  const index = buildWebSsRowIndexExcel(sheet);
+   const mappingRows = getTop10RawDataRows();
+ 
+   const rows: Top10EditorRow[] = [];
+@@ -51,10 +48,9 @@ export async function loadTop10EditorSchema(): Promise<Top10EditorSchema> {
+     const meter = key.slice(0, pipe);
+     const location = normalizeTop10Location(key.slice(pipe + 1));
+     const mapping = findMappingForWebSsRow(index, sheetRow, mappingRows);
+-    const displayMeter =
+-      sheet[XLSX.utils.encode_cell({ r: sheetRow, c: 0 })]?.v ?? meter;
+-    const displayLocation =
+-      sheet[XLSX.utils.encode_cell({ r: sheetRow, c: 1 })]?.v ?? location;
++    const sheetCells = sheet.getRow(sheetRow);
++    const displayMeter = sheetCells.getCell(1).value ?? meter;
++    const displayLocation = sheetCells.getCell(2).value ?? location;
+     const mapped = Boolean(mapping);
+     if (!mapped) unmapped += 1;
+     rows.push({
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-insert.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-insert.ts
+index e08bd5e..ae20146 100644
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-insert.ts
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-insert.ts
+@@ -1,20 +1,19 @@
+ import { readFile } from "fs/promises";
+-import * as XLSX from "xlsx";
+ import {
+   Top10EditorError,
+   ensureMappingOverrideCopy,
+   persistTop10Edit,
+   readTop10Workbook,
+ } from "@/lib/master-editor/top-10-editor-persist";
+-import { insertSheetRowAfter } from "@/lib/master-editor/top-10-sheet-mutate";
++import { insertSheetRowAfterExcel } from "@/lib/master-editor/top-10-sheet-mutate-excel";
+ import {
+   getTop10RawDataRows,
+   top10RawDataRowsOverridePath,
+   type Top10RawDataRow,
+ } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
+ import { TOP10_LINK_ID_TO_LOGICAL_ID } from "@/lib/raw-to-master/top-10-link-map";
++import { buildWebSsRowIndexExcel } from "@/lib/raw-to-master/top-10-excel";
+ import {
+-  buildWebSsRowIndex,
+   normalizeTop10Location,
+   resolveWebSsRow,
+   webSsRowKey,
+@@ -147,7 +146,7 @@ export async function applyTop10Insert(
+   options: { dryRun?: boolean } = {},
+ ): Promise<{ preview: Top10InsertPreview; backupDir: string | null }> {
+   const { workbook, sheet } = await readTop10Workbook();
+-  const sheetIndex = buildWebSsRowIndex(sheet);
++  const sheetIndex = buildWebSsRowIndexExcel(sheet);
+   const preview = planTop10Insert(input, getTop10RawDataRows(), sheetIndex);
+ 
+   if (options.dryRun) {
+@@ -180,15 +179,10 @@ export async function applyTop10Insert(
+   }
+   stored.splice(insertAt, 0, draft);
+ 
+-  const newRow = insertSheetRowAfter(sheet, preview.anchorSheetRow);
+-  sheet[XLSX.utils.encode_cell({ r: newRow, c: 0 })] = {
+-    t: "s",
+-    v: draft.meter,
+-  };
+-  sheet[XLSX.utils.encode_cell({ r: newRow, c: 1 })] = {
+-    t: "s",
+-    v: draft.location,
+-  };
++  const newRow = insertSheetRowAfterExcel(sheet, preview.anchorSheetRow);
++  const row = sheet.getRow(newRow);
++  row.getCell(1).value = draft.meter;
++  row.getCell(2).value = draft.location;
+ 
+   const backupDir = await persistTop10Edit(workbook, stored);
+   return { preview: { ...preview, newSheetRow: newRow }, backupDir };
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-remove.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-remove.ts
+index e018548..b8bb7d9 100644
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-remove.ts
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-remove.ts
+@@ -9,14 +9,14 @@ import {
+   assertRemovableMappingRow,
+   assertRemovableSheetRow,
+ } from "@/lib/master-editor/top-10-protected-rows";
+-import { deleteSheetRowAt } from "@/lib/master-editor/top-10-sheet-mutate";
++import { deleteSheetRowAtExcel } from "@/lib/master-editor/top-10-sheet-mutate-excel";
+ import {
+   getTop10RawDataRows,
+   top10RawDataRowsOverridePath,
+   type Top10RawDataRow,
+ } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
++import { buildWebSsRowIndexExcel } from "@/lib/raw-to-master/top-10-excel";
+ import {
+-  buildWebSsRowIndex,
+   normalizeTop10Location,
+   resolveWebSsRow,
+   webSsRowKey,
+@@ -75,7 +75,7 @@ export async function applyTop10Remove(
+   options: { dryRun?: boolean } = {},
+ ): Promise<{ preview: Top10RemovePreview; backupDir: string | null }> {
+   const { workbook, sheet } = await readTop10Workbook();
+-  const sheetIndex = buildWebSsRowIndex(sheet);
++  const sheetIndex = buildWebSsRowIndexExcel(sheet);
+   const preview = planTop10Remove(input, getTop10RawDataRows(), sheetIndex);
+ 
+   if (options.dryRun) {
+@@ -94,7 +94,7 @@ export async function applyTop10Remove(
+     );
+   }
+ 
+-  deleteSheetRowAt(sheet, preview.sheetRow);
++  deleteSheetRowAtExcel(sheet, preview.sheetRow);
+   const backupDir = await persistTop10Edit(workbook, stored);
+   return { preview, backupDir };
+ }
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-rename.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-rename.ts
+index 4b73e4d..b2d6604 100644
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-rename.ts
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-rename.ts
+@@ -1,5 +1,4 @@
+ import { readFile } from "fs/promises";
+-import * as XLSX from "xlsx";
+ import {
+   Top10EditorError,
+   ensureMappingOverrideCopy,
+@@ -11,8 +10,8 @@ import {
+   top10RawDataRowsOverridePath,
+   type Top10RawDataRow,
+ } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
++import { buildWebSsRowIndexExcel } from "@/lib/raw-to-master/top-10-excel";
+ import {
+-  buildWebSsRowIndex,
+   normalizeTop10Location,
+   resolveWebSsRow,
+   webSsRowKey,
+@@ -112,7 +111,7 @@ export async function applyTop10Rename(
+   options: { dryRun?: boolean } = {},
+ ): Promise<{ preview: Top10RenamePreview; backupDir: string | null }> {
+   const { workbook, sheet } = await readTop10Workbook();
+-  const sheetIndex = buildWebSsRowIndex(sheet);
++  const sheetIndex = buildWebSsRowIndexExcel(sheet);
+   const rows = [...getTop10RawDataRows()];
+   const preview = planTop10Rename(input, rows, sheetIndex);
+ 
+@@ -142,14 +141,9 @@ export async function applyTop10Rename(
+     location: fields.newLocation,
+   };
+ 
+-  sheet[XLSX.utils.encode_cell({ r: preview.sheetRow, c: 0 })] = {
+-    t: "s",
+-    v: fields.newMeter,
+-  };
+-  sheet[XLSX.utils.encode_cell({ r: preview.sheetRow, c: 1 })] = {
+-    t: "s",
+-    v: fields.newLocation,
+-  };
++  const row = sheet.getRow(preview.sheetRow);
++  row.getCell(1).value = fields.newMeter;
++  row.getCell(2).value = fields.newLocation;
+ 
+   const backupDir = await persistTop10Edit(workbook, mappingRows);
+   return { preview, backupDir };
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-sheet-mutate-excel.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-sheet-mutate-excel.ts
+new file mode 100644
+index 0000000..61bf0db
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/master-editor/top-10-sheet-mutate-excel.ts
+@@ -0,0 +1,30 @@
++import type ExcelJS from "exceljs";
++import { copyRowPresentationExcel } from "@/lib/raw-to-master/exceljs-preserve";
++
++/**
++ * Insert a blank row immediately below `afterRow` (Excel 1-based), shifting
++ * lower rows down and cloning row presentation from the anchor row.
++ */
++export function insertSheetRowAfterExcel(
++  sheet: ExcelJS.Worksheet,
++  afterRow: number,
++): number {
++  const newRow = afterRow + 1;
++  sheet.spliceRows(newRow, 0, []);
++  const templateRow = sheet.getRow(afterRow);
++  const targetRow = sheet.getRow(newRow);
++  copyRowPresentationExcel(templateRow, targetRow);
++  templateRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
++    if (colNumber <= 2) return;
++    targetRow.getCell(colNumber).value = null;
++  });
++  return newRow;
++}
++
++/** Remove one row (Excel 1-based) and shift rows below up. */
++export function deleteSheetRowAtExcel(
++  sheet: ExcelJS.Worksheet,
++  rowIndex: number,
++): void {
++  sheet.spliceRows(rowIndex, 1);
++}
+diff --git a/disney-energy-gas-monitor/lib/master-editor/top-10-sheet-mutate.ts b/disney-energy-gas-monitor/lib/master-editor/top-10-sheet-mutate.ts
+deleted file mode 100644
+index ee3c2db..0000000
+--- a/disney-energy-gas-monitor/lib/master-editor/top-10-sheet-mutate.ts
++++ /dev/null
+@@ -1,48 +0,0 @@
+-import * as XLSX from "xlsx";
+-
+-/** Shift WebSS_Data rows down and clear the inserted row (cols A/B set by caller). */
+-export function insertSheetRowAfter(sheet: XLSX.WorkSheet, afterRow: number): number {
+-  const range = XLSX.utils.decode_range(sheet["!ref"] ?? "A1:A1");
+-  const newRow = afterRow + 1;
+-  for (let r = range.e.r; r > afterRow; r -= 1) {
+-    for (let c = range.s.c; c <= range.e.c; c += 1) {
+-      const from = XLSX.utils.encode_cell({ r, c });
+-      const to = XLSX.utils.encode_cell({ r: r + 1, c });
+-      const cell = sheet[from];
+-      if (cell) {
+-        sheet[to] = { ...cell };
+-      } else {
+-        delete sheet[to];
+-      }
+-    }
+-  }
+-  for (let c = range.s.c; c <= range.e.c; c += 1) {
+-    delete sheet[XLSX.utils.encode_cell({ r: newRow, c })];
+-  }
+-  range.e.r += 1;
+-  sheet["!ref"] = XLSX.utils.encode_range(range);
+-  return newRow;
+-}
+-
+-/** Remove a row and shift rows below up (hard delete). */
+-export function deleteSheetRowAt(sheet: XLSX.WorkSheet, rowIndex: number): void {
+-  const range = XLSX.utils.decode_range(sheet["!ref"] ?? "A1:A1");
+-  if (rowIndex > range.e.r) return;
+-  for (let r = rowIndex; r < range.e.r; r += 1) {
+-    for (let c = range.s.c; c <= range.e.c; c += 1) {
+-      const from = XLSX.utils.encode_cell({ r: r + 1, c });
+-      const to = XLSX.utils.encode_cell({ r, c });
+-      const cell = sheet[from];
+-      if (cell) {
+-        sheet[to] = { ...cell };
+-      } else {
+-        delete sheet[to];
+-      }
+-    }
+-  }
+-  for (let c = range.s.c; c <= range.e.c; c += 1) {
+-    delete sheet[XLSX.utils.encode_cell({ r: range.e.r, c })];
+-  }
+-  range.e.r = Math.max(range.s.r, range.e.r - 1);
+-  sheet["!ref"] = XLSX.utils.encode_range(range);
+-}
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/exceljs-preserve.ts b/disney-energy-gas-monitor/lib/raw-to-master/exceljs-preserve.ts
+new file mode 100644
+index 0000000..8e1f273
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/raw-to-master/exceljs-preserve.ts
+@@ -0,0 +1,57 @@
++import ExcelJS from "exceljs";
++import { readFile, writeFile } from "fs/promises";
++
++export async function loadExcelWorkbook(
++  masterWorkbookPath: string,
++): Promise<ExcelJS.Workbook> {
++  const buffer = await readFile(masterWorkbookPath);
++  const workbook = new ExcelJS.Workbook();
++  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
++  return workbook;
++}
++
++export async function saveExcelWorkbook(
++  workbook: ExcelJS.Workbook,
++  masterWorkbookPath: string,
++): Promise<void> {
++  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
++  await writeFile(masterWorkbookPath, buffer);
++}
++
++/** Copy number format, fill, font, border, alignment (not value). */
++export function copyCellPresentation(
++  source: ExcelJS.Cell,
++  target: ExcelJS.Cell,
++): void {
++  if (source.style && Object.keys(source.style).length > 0) {
++    target.style = JSON.parse(JSON.stringify(source.style));
++  }
++  if (source.numFmt) {
++    target.numFmt = source.numFmt;
++  }
++}
++
++export function copyColumnPresentation(
++  sheet: ExcelJS.Worksheet,
++  sourceCol: number,
++  targetCol: number,
++  fromRow: number,
++  toRow: number,
++): void {
++  for (let row = fromRow; row <= toRow; row += 1) {
++    copyCellPresentation(
++      sheet.getRow(row).getCell(sourceCol),
++      sheet.getRow(row).getCell(targetCol),
++    );
++  }
++}
++
++export function copyRowPresentationExcel(
++  source: ExcelJS.Row,
++  target: ExcelJS.Row,
++): void {
++  if (source.height) target.height = source.height;
++  source.eachCell({ includeEmpty: true }, (cell, colNumber) => {
++    copyCellPresentation(cell, target.getCell(colNumber));
++  });
++}
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/power-solar-context.ts b/disney-energy-gas-monitor/lib/raw-to-master/power-solar-context.ts
+index f0ce9f4..7c43030 100644
+--- a/disney-energy-gas-monitor/lib/raw-to-master/power-solar-context.ts
++++ b/disney-energy-gas-monitor/lib/raw-to-master/power-solar-context.ts
+@@ -1,13 +1,19 @@
+-import { readFile, writeFile } from "fs/promises";
++import type ExcelJS from "exceljs";
+ import * as XLSX from "xlsx";
+ import {
+   excelSerialMatchesIsoDate,
+   isoDateToExcelSerial,
+ } from "@/lib/raw-to-master/excel-date";
+ import {
+-  POWER_SOLAR_SHEET_CONFIG,
+-  type PowerSolarArea,
+-} from "@/lib/raw-to-master/power-solar-mappings";
++  loadExcelWorkbook,
++  saveExcelWorkbook,
++} from "@/lib/raw-to-master/exceljs-preserve";
++import {
++  ensurePowerSolarDateRow,
++  getPowerSolarSheet,
++  setNumericCellExcel,
++} from "@/lib/raw-to-master/power-solar-excel";
++import { POWER_SOLAR_SHEET_CONFIG } from "@/lib/raw-to-master/power-solar-mappings";
+ 
+ /** 0-based column indices on Hotel / Park daily rows. */
+ export const PS_HOTEL_COL = { occupancy: 14, thirtyDays: 15 } as const;
+@@ -106,6 +112,31 @@ export function writeParkContextFormulas(
+   );
+ }
+ 
++export function writeHotelContextFormulasExcel(
++  sheet: ExcelJS.Worksheet,
++  dataRow: number,
++): void {
++  sheet.getRow(dataRow).getCell(PS_HOTEL_COL.thirtyDays + 1).value = {
++    formula: `AND(A${dataRow}>=(TODAY()-30),A${dataRow}<TODAY())`,
++    result: true,
++  };
++}
++
++export function writeParkContextFormulasExcel(
++  sheet: ExcelJS.Worksheet,
++  dataRow: number,
++  attendance: number,
++): void {
++  sheet.getRow(dataRow).getCell(PS_PARK_COL.thirtyDays + 1).value = {
++    formula: `AND(A${dataRow}>=(TODAY()-30),A${dataRow}<TODAY())`,
++    result: true,
++  };
++  sheet.getRow(dataRow).getCell(PS_PARK_COL.remarks + 1).value = {
++    formula: `IF(Z${dataRow}=0,"CLOSE","OPEN")`,
++    result: attendance === 0 ? "CLOSE" : "OPEN",
++  };
++}
++
+ export interface PowerSolarContextUpdate {
+   dataDate: string;
+   outdoorAirTempC?: number | null;
+@@ -121,44 +152,58 @@ export async function updatePowerSolarContextColumns(
+   masterWorkbookPath: string,
+   update: PowerSolarContextUpdate,
+ ): Promise<{ hotelRow: number | null; parkRow: number | null }> {
+-  const buffer = await readFile(masterWorkbookPath);
+-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
++  const workbook = await loadExcelWorkbook(masterWorkbookPath);
+ 
+   let hotelRow: number | null = null;
+   let parkRow: number | null = null;
+ 
+-  const hotelSheet = workbook.Sheets.Hotel;
+-  if (hotelSheet) {
++  try {
++    const hotelSheet = getPowerSolarSheet(workbook, "Hotel");
+     const cfg = POWER_SOLAR_SHEET_CONFIG.Hotel;
+     const firstData = cfg.headerRowIndex + 1;
+-    let row = findDateRow(hotelSheet, update.dataDate, firstData);
+-    if (row === null) row = appendDateRow(hotelSheet, update.dataDate);
++    const row = ensurePowerSolarDateRow(hotelSheet, update.dataDate, firstData);
+     hotelRow = row;
+-    writeHotelContextFormulas(hotelSheet, row);
++    writeHotelContextFormulasExcel(hotelSheet, row);
+     if (update.overallOccupancy != null) {
+-      setNumber(hotelSheet, row, PS_HOTEL_COL.occupancy, update.overallOccupancy);
++      setNumericCellExcel(
++        hotelSheet,
++        row,
++        PS_HOTEL_COL.occupancy + 1,
++        update.overallOccupancy,
++      );
+     }
++  } catch {
+   }
+ 
+-  const parkSheet = workbook.Sheets.Park;
+-  if (parkSheet) {
++  try {
++    const parkSheet = getPowerSolarSheet(workbook, "Park");
+     const cfg = POWER_SOLAR_SHEET_CONFIG.Park;
+     const firstData = cfg.headerRowIndex + 1;
+-    let row = findDateRow(parkSheet, update.dataDate, firstData);
+-    if (row === null) row = appendDateRow(parkSheet, update.dataDate);
++    const row = ensurePowerSolarDateRow(parkSheet, update.dataDate, firstData);
+     parkRow = row;
+-    const atten = update.atten ?? Number(parkSheet[XLSX.utils.encode_cell({ r: row, c: PS_PARK_COL.attendance })]?.v) ?? 0;
++    const attenCell = parkSheet.getRow(row).getCell(PS_PARK_COL.attendance + 1).value;
++    const atten = update.atten ?? Number(attenCell) ?? 0;
+     if (update.atten != null) {
+-      setNumber(parkSheet, row, PS_PARK_COL.attendance, update.atten);
++      setNumericCellExcel(
++        parkSheet,
++        row,
++        PS_PARK_COL.attendance + 1,
++        update.atten,
++      );
+     }
+     if (update.outdoorAirTempC != null) {
+-      setNumber(parkSheet, row, PS_PARK_COL.temperature, update.outdoorAirTempC);
++      setNumericCellExcel(
++        parkSheet,
++        row,
++        PS_PARK_COL.temperature + 1,
++        update.outdoorAirTempC,
++      );
+     }
+-    writeParkContextFormulas(parkSheet, row, update.atten ?? atten);
++    writeParkContextFormulasExcel(parkSheet, row, update.atten ?? atten);
++  } catch {
+   }
+ 
+-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+-  await writeFile(masterWorkbookPath, out);
++  await saveExcelWorkbook(workbook, masterWorkbookPath);
+ 
+   return { hotelRow, parkRow };
+ }
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/power-solar-excel.ts b/disney-energy-gas-monitor/lib/raw-to-master/power-solar-excel.ts
+new file mode 100644
+index 0000000..576509b
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/raw-to-master/power-solar-excel.ts
+@@ -0,0 +1,112 @@
++import type ExcelJS from "exceljs";
++import {
++  excelSerialToDate,
++  normalizeHeader,
++} from "@/lib/datastore/parsers/excel-utils";
++import {
++  excelSerialMatchesIsoDate,
++  isoDateToExcelSerial,
++} from "@/lib/raw-to-master/excel-date";
++import {
++  copyRowPresentationExcel,
++  copyCellPresentation,
++} from "@/lib/raw-to-master/exceljs-preserve";
++import {
++  POWER_SOLAR_SHEET_CONFIG,
++  type PowerSolarArea,
++} from "@/lib/raw-to-master/power-solar-mappings";
++
++function cellIsoDate(value: ExcelJS.CellValue): string | null {
++  if (value instanceof Date) return value.toISOString().slice(0, 10);
++  if (typeof value === "number") return excelSerialToDate(value);
++  return null;
++}
++
++export function buildHeaderColumnMapExcel(
++  sheet: ExcelJS.Worksheet,
++  headerRowIndex: number,
++): Map<string, number> {
++  const map = new Map<string, number>();
++  const excelHeaderRow = headerRowIndex + 1;
++  const row = sheet.getRow(excelHeaderRow);
++  row.eachCell({ includeEmpty: false }, (cell, col) => {
++    const text = String(cell.value ?? "").trim();
++    if (text) map.set(normalizeHeader(text), col);
++  });
++  return map;
++}
++
++export function findPowerSolarDateRow(
++  sheet: ExcelJS.Worksheet,
++  dataDate: string,
++  firstDataRowIndex: number,
++): number | null {
++  const excelFirstDataRow = firstDataRowIndex + 1;
++  const last = sheet.rowCount;
++  for (let row = excelFirstDataRow; row <= last; row += 1) {
++    const value = sheet.getRow(row).getCell(1).value;
++    if (excelSerialMatchesIsoDate(value, dataDate)) return row;
++  }
++  return null;
++}
++
++function findLastDateRow(sheet: ExcelJS.Worksheet, firstDataRowIndex: number): number | null {
++  const excelFirstDataRow = firstDataRowIndex + 1;
++  let last: number | null = null;
++  for (let row = excelFirstDataRow; row <= sheet.rowCount; row += 1) {
++    if (cellIsoDate(sheet.getRow(row).getCell(1).value)) last = row;
++  }
++  return last;
++}
++
++export function ensurePowerSolarDateRow(
++  sheet: ExcelJS.Worksheet,
++  dataDate: string,
++  firstDataRowIndex: number,
++): number {
++  const existing = findPowerSolarDateRow(sheet, dataDate, firstDataRowIndex);
++  if (existing !== null) return existing;
++
++  const templateRow = findLastDateRow(sheet, firstDataRowIndex);
++  if (templateRow === null) {
++    throw new Error("Power_Solar sheet has no dated rows to use as template");
++  }
++
++  const insertAt = templateRow + 1;
++  sheet.spliceRows(insertAt, 0, []);
++  const template = sheet.getRow(templateRow);
++  const newRow = sheet.getRow(insertAt);
++  copyRowPresentationExcel(template, newRow);
++
++  const serial = isoDateToExcelSerial(dataDate);
++  const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
++  newRow.getCell(1).value = utc;
++
++  return insertAt;
++}
++
++export function setNumericCellExcel(
++  sheet: ExcelJS.Worksheet,
++  row: number,
++  col: number,
++  value: number,
++  styleTemplate?: ExcelJS.Cell,
++): void {
++  const cell = sheet.getRow(row).getCell(col);
++  if (styleTemplate) {
++    copyCellPresentation(styleTemplate, cell);
++  }
++  cell.value = value;
++}
++
++export function getPowerSolarSheet(
++  workbook: ExcelJS.Workbook,
++  area: PowerSolarArea,
++): ExcelJS.Worksheet {
++  const name = POWER_SOLAR_SHEET_CONFIG[area].sheetName;
++  const sheet = workbook.getWorksheet(name);
++  if (!sheet) {
++    throw new Error(`Power_Solar master missing sheet "${name}"`);
++  }
++  return sheet;
++}
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/power-solar.ts b/disney-energy-gas-monitor/lib/raw-to-master/power-solar.ts
+index 2ad2acd..5b06c74 100644
+--- a/disney-energy-gas-monitor/lib/raw-to-master/power-solar.ts
++++ b/disney-energy-gas-monitor/lib/raw-to-master/power-solar.ts
+@@ -1,9 +1,19 @@
+-import { readFile, writeFile } from "fs/promises";
++import { readFile } from "fs/promises";
+ import * as XLSX from "xlsx";
+ import {
+   normalizeHeader,
+   excelSerialToDate,
+ } from "@/lib/datastore/parsers/excel-utils";
++import {
++  loadExcelWorkbook,
++  saveExcelWorkbook,
++} from "@/lib/raw-to-master/exceljs-preserve";
++import {
++  buildHeaderColumnMapExcel,
++  ensurePowerSolarDateRow,
++  getPowerSolarSheet,
++  setNumericCellExcel,
++} from "@/lib/raw-to-master/power-solar-excel";
+ import { csvColumnDailyDeltaKwh } from "@/lib/raw-to-master/csv-column-delta";
+ import { FeedInTariffLookup } from "@/lib/raw-to-master/feed-in-tariff-lookup";
+ import {
+@@ -12,10 +22,11 @@ import {
+ } from "@/lib/raw-to-master/excel-date";
+ import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
+ import {
+-  writeHotelContextFormulas,
+-  writeParkContextFormulas,
++  writeHotelContextFormulasExcel,
++  writeParkContextFormulasExcel,
+   PS_PARK_COL,
+ } from "@/lib/raw-to-master/power-solar-context";
++import type ExcelJS from "exceljs";
+ import {
+   HOTEL_PROPERTY_SUBTOTALS,
+   MERCURY_RAW_LOGICAL_IDS,
+@@ -184,8 +195,7 @@ export async function convertPowerSolarMaster(
+   const feedInBuffer = await readFile(input.feedInTariffPath);
+   const feedIn = FeedInTariffLookup.fromBuffer(feedInBuffer);
+ 
+-  const buffer = await readFile(input.masterWorkbookPath);
+-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
++  const workbook = await loadExcelWorkbook(input.masterWorkbookPath);
+   const meterValues = computeMeterValues(
+     input.dataDate,
+     input.rawCsvByLogicalId,
+@@ -196,21 +206,21 @@ export async function convertPowerSolarMaster(
+ 
+   for (const area of ["CCP", "HCCP", "Hotel", "Park"] as PowerSolarArea[]) {
+     const config = POWER_SOLAR_SHEET_CONFIG[area];
+-    const sheet = workbook.Sheets[config.sheetName];
+-    if (!sheet) {
+-      throw new Error(
+-        `Power_Solar master missing sheet "${config.sheetName}"`,
+-      );
+-    }
++    const sheet = getPowerSolarSheet(workbook, area);
+ 
+-    const headerMap = buildHeaderColumnMap(sheet, config.headerRowIndex);
++    const headerMap = buildHeaderColumnMapExcel(sheet, config.headerRowIndex);
+     const firstDataRow = config.headerRowIndex + 1;
+-    let dataRow = findDateRow(sheet, input.dataDate, firstDataRow);
+-    if (dataRow === null) {
+-      dataRow = appendDateRow(sheet, input.dataDate);
+-    }
++    const dataRow = ensurePowerSolarDateRow(
++      sheet,
++      input.dataDate,
++      firstDataRow,
++    );
+ 
+     let wroteInArea = false;
++    const styleColFor = (col: number): ExcelJS.Cell | undefined => {
++      const priorRow = dataRow > firstDataRow + 1 ? dataRow - 1 : dataRow;
++      return sheet.getRow(priorRow).getCell(col);
++    };
+ 
+     for (const mapping of POWER_SOLAR_METER_MAPPINGS.filter(
+       (m) => m.area === area,
+@@ -226,7 +236,7 @@ export async function convertPowerSolarMaster(
+         );
+       }
+ 
+-      setNumericCell(sheet, dataRow, col, value);
++      setNumericCellExcel(sheet, dataRow, col, value, styleColFor(col));
+       metersWritten += 1;
+       wroteInArea = true;
+     }
+@@ -243,7 +253,7 @@ export async function convertPowerSolarMaster(
+         }
+         const subCol = headerMap.get(normalizeHeader(group.subtotalHeader));
+         if (subCol !== undefined) {
+-          setNumericCell(sheet, dataRow, subCol, subtotal);
++          setNumericCellExcel(sheet, dataRow, subCol, subtotal, styleColFor(subCol));
+         }
+       }
+     }
+@@ -251,27 +261,27 @@ export async function convertPowerSolarMaster(
+     const totalHeader = POWER_SOLAR_AREA_TOTAL_HEADERS[area];
+     const totalCol = headerMap.get(normalizeHeader(totalHeader));
+     if (totalCol !== undefined && wroteInArea) {
+-      setNumericCell(sheet, dataRow, totalCol, areaSum);
++      setNumericCellExcel(sheet, dataRow, totalCol, areaSum, styleColFor(totalCol));
+     }
+ 
+     if (area === "Hotel" && wroteInArea) {
+-      writeHotelContextFormulas(sheet, dataRow);
++      writeHotelContextFormulasExcel(sheet, dataRow);
+     }
+ 
+     if (area === "Park" && wroteInArea) {
+       const outdoor = outdoorAirTempFromDaily1Csv(input.rawCsvByLogicalId);
+       if (outdoor !== null) {
+-        setNumericCell(sheet, dataRow, PS_PARK_COL.temperature, outdoor);
++        setNumericCellExcel(
++          sheet,
++          dataRow,
++          PS_PARK_COL.temperature + 1,
++          outdoor,
++          styleColFor(PS_PARK_COL.temperature + 1),
++        );
+       }
+-      const attenCell =
+-        sheet[
+-          XLSX.utils.encode_cell({
+-            r: dataRow,
+-            c: PS_PARK_COL.attendance,
+-          })
+-        ];
+-      const atten = Number(attenCell?.v);
+-      writeParkContextFormulas(
++      const attenVal = sheet.getRow(dataRow).getCell(PS_PARK_COL.attendance + 1).value;
++      const atten = Number(attenVal);
++      writeParkContextFormulasExcel(
+         sheet,
+         dataRow,
+         Number.isFinite(atten) ? atten : 0,
+@@ -281,8 +291,7 @@ export async function convertPowerSolarMaster(
+     if (wroteInArea) areasUpdated.add(area);
+   }
+ 
+-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+-  await writeFile(input.masterWorkbookPath, out);
++  await saveExcelWorkbook(workbook, input.masterWorkbookPath);
+ 
+   return {
+     dataDate: input.dataDate,
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/top-10-excel.ts b/disney-energy-gas-monitor/lib/raw-to-master/top-10-excel.ts
+new file mode 100644
+index 0000000..2b8574f
+--- /dev/null
++++ b/disney-energy-gas-monitor/lib/raw-to-master/top-10-excel.ts
+@@ -0,0 +1,126 @@
++import type ExcelJS from "exceljs";
++import { excelSerialToDate, normalizeHeader } from "@/lib/datastore/parsers/excel-utils";
++import {
++  excelSerialMatchesIsoDate,
++  isoDateToExcelSerial,
++} from "@/lib/raw-to-master/excel-date";
++import { copyColumnPresentation } from "@/lib/raw-to-master/exceljs-preserve";
++import {
++  WEBSS_SHEET_NAME,
++  normalizeTop10Location,
++  TOP10_WEBSS_METER_ALIASES,
++  webSsRowKey,
++} from "@/lib/raw-to-master/top-10-webss";
++
++/** WebSS_Data row 1 = dates; column A/B = meter/location (Excel 1-based). */
++export const WEBSS_DATE_HEADER_ROW = 1;
++export const WEBSS_FIRST_DATA_ROW = 2;
++export const WEBSS_FIRST_DATE_COL = 3;
++
++export function buildWebSsRowIndexExcel(
++  sheet: ExcelJS.Worksheet,
++): Map<string, number> {
++  const map = new Map<string, number>();
++  const last = sheet.rowCount;
++  for (let row = WEBSS_FIRST_DATA_ROW; row <= last; row += 1) {
++    const meter = sheet.getRow(row).getCell(1).value;
++    const location = sheet.getRow(row).getCell(2).value;
++    if (meter == null || String(meter).trim() === "") continue;
++    map.set(
++      webSsRowKey(String(meter), normalizeTop10Location(location)),
++      row,
++    );
++  }
++  return map;
++}
++
++function cellIsoDate(value: ExcelJS.CellValue): string | null {
++  if (value instanceof Date) {
++    return value.toISOString().slice(0, 10);
++  }
++  if (typeof value === "number") {
++    return excelSerialToDate(value);
++  }
++  return null;
++}
++
++export function findWebSsDateColumnExcel(
++  sheet: ExcelJS.Worksheet,
++  dataDate: string,
++): number | null {
++  const lastCol = sheet.columnCount;
++  for (let col = WEBSS_FIRST_DATE_COL; col <= lastCol; col += 1) {
++    const value = sheet.getRow(WEBSS_DATE_HEADER_ROW).getCell(col).value;
++    if (excelSerialMatchesIsoDate(value, dataDate)) {
++      return col;
++    }
++  }
++  return null;
++}
++
++function lastPopulatedDateColumn(sheet: ExcelJS.Worksheet): number | null {
++  let last: number | null = null;
++  const lastCol = sheet.columnCount;
++  for (let col = WEBSS_FIRST_DATE_COL; col <= lastCol; col += 1) {
++    const iso = cellIsoDate(
++      sheet.getRow(WEBSS_DATE_HEADER_ROW).getCell(col).value,
++    );
++    if (iso) last = col;
++  }
++  return last;
++}
++
++/** Append a date column, cloning presentation from the previous date column. */
++export function appendWebSsDateColumnExcel(
++  sheet: ExcelJS.Worksheet,
++  dataDate: string,
++): number {
++  const templateCol = lastPopulatedDateColumn(sheet);
++  const newCol = templateCol !== null ? templateCol + 1 : WEBSS_FIRST_DATE_COL;
++  const lastRow = Math.max(sheet.rowCount, WEBSS_FIRST_DATA_ROW);
++
++  if (templateCol !== null) {
++    copyColumnPresentation(
++      sheet,
++      templateCol,
++      newCol,
++      WEBSS_DATE_HEADER_ROW,
++      lastRow,
++    );
++  }
++
++  const serial = isoDateToExcelSerial(dataDate);
++  const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
++  sheet.getRow(WEBSS_DATE_HEADER_ROW).getCell(newCol).value = utc;
++
++  return newCol;
++}
++
++export function resolveWebSsRowExcel(
++  index: Map<string, number>,
++  meterId: string,
++  location: string,
++): number | null {
++  const candidates = [meterId, ...(TOP10_WEBSS_METER_ALIASES[meterId] ?? [])];
++  const loc = normalizeTop10Location(location);
++  for (const candidate of candidates) {
++    const row = index.get(webSsRowKey(candidate, loc));
++    if (row !== undefined) return row;
++  }
++  const meterNorm = normalizeHeader(meterId);
++  let found: number | undefined;
++  for (const [key, row] of index) {
++    if (!key.startsWith(`${meterNorm}|`)) continue;
++    if (found !== undefined && found !== row) return null;
++    found = row;
++  }
++  return found ?? null;
++}
++
++export function getWebSsSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet {
++  const sheet = workbook.getWorksheet(WEBSS_SHEET_NAME);
++  if (!sheet) {
++    throw new Error(`Top_10 master missing sheet "${WEBSS_SHEET_NAME}"`);
++  }
++  return sheet;
++}
+diff --git a/disney-energy-gas-monitor/lib/raw-to-master/top-10.ts b/disney-energy-gas-monitor/lib/raw-to-master/top-10.ts
+index a8b235b..5718c27 100644
+--- a/disney-energy-gas-monitor/lib/raw-to-master/top-10.ts
++++ b/disney-energy-gas-monitor/lib/raw-to-master/top-10.ts
+@@ -1,20 +1,25 @@
+-import { readFile, writeFile } from "fs/promises";
+-import * as XLSX from "xlsx";
++import { readFile } from "fs/promises";
+ import { getTop10RawDataRows } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
++import {
++  loadExcelWorkbook,
++  saveExcelWorkbook,
++} from "@/lib/raw-to-master/exceljs-preserve";
++import {
++  appendWebSsDateColumnExcel,
++  buildWebSsRowIndexExcel,
++  findWebSsDateColumnExcel,
++  getWebSsSheet,
++  resolveWebSsRowExcel,
++  WEBSS_DATE_HEADER_ROW,
++  WEBSS_FIRST_DATE_COL,
++} from "@/lib/raw-to-master/top-10-excel";
+ import {
+   csvColumnDailyAverage,
+   csvColumnDailyDeltaKwh,
+ } from "@/lib/raw-to-master/csv-column-delta";
+ import { FeedInTariffLookup } from "@/lib/raw-to-master/feed-in-tariff-lookup";
+ import { logicalIdForTop10Link } from "@/lib/raw-to-master/top-10-link-map";
+-import {
+-  appendWebSsDateColumn,
+-  buildWebSsRowIndex,
+-  findWebSsDateColumn,
+-  normalizeTop10Location,
+-  resolveWebSsRow,
+-  WEBSS_SHEET_NAME,
+-} from "@/lib/raw-to-master/top-10-webss";
++import { normalizeTop10Location } from "@/lib/raw-to-master/top-10-webss";
+ 
+ import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
+ import {
+@@ -153,17 +158,10 @@ export async function convertTop10Master(
+     }
+   }
+ 
+-  const buffer = await readFile(input.masterWorkbookPath);
+-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+-  const sheet = workbook.Sheets[WEBSS_SHEET_NAME];
+-  if (!sheet) {
+-    throw new Top10ConversionError(
+-      `Top_10 master missing sheet "${WEBSS_SHEET_NAME}"`,
+-      "MISSING_RAW",
+-    );
+-  }
++  const workbook = await loadExcelWorkbook(input.masterWorkbookPath);
++  const sheet = getWebSsSheet(workbook);
+ 
+-  let dateCol = findWebSsDateColumn(sheet, input.dataDate);
++  let dateCol = findWebSsDateColumnExcel(sheet, input.dataDate);
+   if (dateCol !== null && !input.replaceExisting) {
+     throw new Top10ConversionError(
+       `Top_10 already has data for ${input.dataDate}`,
+@@ -171,10 +169,15 @@ export async function convertTop10Master(
+     );
+   }
+   if (dateCol === null) {
+-    dateCol = appendWebSsDateColumn(sheet, input.dataDate);
++    dateCol = appendWebSsDateColumnExcel(sheet, input.dataDate);
+   }
+ 
+-  const rowIndex = buildWebSsRowIndex(sheet);
++  const rowIndex = buildWebSsRowIndexExcel(sheet);
++  const templateCol =
++    dateCol > WEBSS_FIRST_DATE_COL ? dateCol - 1 : dateCol;
++  const prevFmt = sheet
++    .getRow(WEBSS_DATE_HEADER_ROW)
++    .getCell(templateCol).numFmt;
+   const computedByRawDataRow = new Map<number, number>();
+   const pendingWrites: Array<{ row: RawRow; value: number }> = [];
+ 
+@@ -202,17 +205,24 @@ export async function convertTop10Master(
+   let metersWritten = 0;
+ 
+   for (const { row, value } of pendingWrites) {
+-    const webRow = resolveWebSsRow(rowIndex, row.meter, row.location);
++    const webRow = resolveWebSsRowExcel(rowIndex, row.meter, row.location);
+     if (webRow === null) {
+       missingRows.push(
+         `${row.meter} @ ${normalizeTop10Location(row.location)}`,
+       );
+       continue;
+     }
+-    sheet[XLSX.utils.encode_cell({ r: webRow, c: dateCol })] = {
+-      t: "n",
+-      v: value,
+-    };
++    const cell = sheet.getRow(webRow).getCell(dateCol);
++    const templateCell = sheet.getRow(webRow).getCell(templateCol);
++    cell.value = value;
++    if (templateCell.style && Object.keys(templateCell.style).length > 0) {
++      cell.style = JSON.parse(JSON.stringify(templateCell.style));
++    }
++    if (templateCell.numFmt) {
++      cell.numFmt = templateCell.numFmt;
++    } else if (prevFmt) {
++      cell.numFmt = prevFmt;
++    }
+     metersWritten += 1;
+   }
+ 
+@@ -229,23 +239,25 @@ export async function convertTop10Master(
+   );
+   const outdoorAvg = computeOutdoorTempC(input.rawCsvByLogicalId);
+   if (outdoorRow && outdoorAvg !== null) {
+-    const webRow = resolveWebSsRow(
++    const webRow = resolveWebSsRowExcel(
+       rowIndex,
+       outdoorRow.meter,
+       outdoorRow.location,
+     );
+     if (webRow !== null) {
+-      sheet[XLSX.utils.encode_cell({ r: webRow, c: dateCol })] = {
+-        t: "n",
+-        v: outdoorAvg,
+-      };
++      const cell = sheet.getRow(webRow).getCell(dateCol);
++      const templateCell = sheet.getRow(webRow).getCell(templateCol);
++      cell.value = outdoorAvg;
++      if (templateCell.style && Object.keys(templateCell.style).length > 0) {
++        cell.style = JSON.parse(JSON.stringify(templateCell.style));
++      }
++      if (templateCell.numFmt) cell.numFmt = templateCell.numFmt;
+       outdoorTempWritten = true;
+       metersWritten += 1;
+     }
+   }
+ 
+-  const out = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+-  await writeFile(input.masterWorkbookPath, out);
++  await saveExcelWorkbook(workbook, input.masterWorkbookPath);
+ 
+   return {
+     dataDate: input.dataDate,
+diff --git a/disney-energy-gas-monitor/lib/upload/upload-token-auth.ts b/disney-energy-gas-monitor/lib/upload/upload-token-auth.ts
+index b2d9dde..227099f 100644
+--- a/disney-energy-gas-monitor/lib/upload/upload-token-auth.ts
++++ b/disney-energy-gas-monitor/lib/upload/upload-token-auth.ts
+@@ -1,9 +1,9 @@
+ import { NextRequest, NextResponse } from "next/server";
+ import { getUploadTokenFromEnv } from "@/lib/master-sheets-config";
+ 
+-/** True when `MASTER_SHEET_UPLOAD_TOKEN` is set on the host. */
++/** True when the host sets `MASTER_SHEET_UPLOAD_TOKEN` (not the UI default). */
+ export function isMasterSheetUploadTokenRequired(): boolean {
+-  return Boolean(getUploadTokenFromEnv());
++  return Boolean(process.env.MASTER_SHEET_UPLOAD_TOKEN?.trim());
+ }
+ 
+ export function masterSheetUploadTokenUnauthorized(): NextResponse {
+@@ -20,16 +20,17 @@ export function checkMasterSheetUploadToken(
+   request: NextRequest,
+   options?: { formToken?: string | null; jsonToken?: string | null },
+ ): NextResponse | null {
+-  const required = getUploadTokenFromEnv();
++  const required = process.env.MASTER_SHEET_UPLOAD_TOKEN?.trim();
+   if (!required) return null;
+ 
++  const expected = getUploadTokenFromEnv();
+   const headerToken = request.headers.get("x-upload-token")?.trim();
+   const queryToken = request.nextUrl.searchParams.get("uploadToken")?.trim();
+   const formToken = options?.formToken?.trim();
+   const jsonToken = options?.jsonToken?.trim();
+ 
+   const ok = [headerToken, queryToken, formToken, jsonToken].some(
+-    (t) => t === required,
++    (t) => t === expected,
+   );
+   return ok ? null : masterSheetUploadTokenUnauthorized();
+ }

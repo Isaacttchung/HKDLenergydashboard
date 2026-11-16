@@ -1,5 +1,8 @@
 import ExcelJS from "exceljs";
 import { readFile, writeFile } from "fs/promises";
+import { applyExcelJsTableLoadPatch } from "@/lib/raw-to-master/exceljs-table-load-patch";
+
+applyExcelJsTableLoadPatch();
 
 export async function loadExcelWorkbook(
   masterWorkbookPath: string,
