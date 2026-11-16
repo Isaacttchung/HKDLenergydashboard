@@ -1,5 +1,11 @@
 import JSZip from "jszip";
 import path from "path";
+import {
+  buildSharedStringsXml,
+  mapWrittenSharedStringIndices,
+  parseSharedStringsXml,
+  remapSharedStringsInWorksheetXml,
+} from "@/lib/raw-to-master/exceljs-shared-strings";
 
 /** Pristine package bytes when the workbook was first loaded this process. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
@@ -56,9 +62,43 @@ async function sheetNameToWorksheetPath(
   return map;
 }
 
+/** Keep layout chrome; take data + dimension from the ExcelJS worksheet. */
+function mergeWorksheetPreservingChrome(
+  pristineWorksheetXml: string,
+  writtenWorksheetXml: string,
+): string {
+  const writtenData = writtenWorksheetXml.match(
+    /<sheetData[\s\S]*?<\/sheetData>/,
+  )?.[0];
+  const writtenDim = writtenWorksheetXml.match(
+    /<dimension ref="([^"]+)"[^/]*\/>/,
+  );
+  if (!writtenData) return pristineWorksheetXml;
+
+  let out = pristineWorksheetXml.replace(
+    /<sheetData[\s\S]*?<\/sheetData>/,
+    writtenData,
+  );
+  if (writtenDim) {
+    if (out.includes("<dimension ")) {
+      out = out.replace(
+        /<dimension ref="([^"]+)"[^/]*\/>/,
+        `<dimension ref="${writtenDim[1]!}"/>`,
+      );
+    } else {
+      out = out.replace(
+        /(<worksheet[^>]*>)/,
+        `$1<dimension ref="${writtenDim[1]!}"/>`,
+      );
+    }
+  }
+  return out;
+}
+
 /**
  * Keep charts, pivots, SharePoint metadata, and untouched sheets from the
- * pristine workbook; take only edited sheets (+ sharedStrings/styles) from ExcelJS.
+ * pristine workbook. Merge only edited sheetData + extend sharedStrings for
+ * that sheet (never replace the global SST table — that blinds other sheets).
  */
 export async function mergeWorkbookFromPristine(
   masterWorkbookPath: string,
@@ -77,26 +117,46 @@ export async function mergeWorkbookFromPristine(
   const pristineSheets = await sheetNameToWorksheetPath(out);
   const writtenSheets = await sheetNameToWorksheetPath(written);
 
+  const pristineSstXml = (await out.file("xl/sharedStrings.xml")?.async("string")) ?? "";
+  const writtenSstXml =
+    (await written.file("xl/sharedStrings.xml")?.async("string")) ?? "";
+  const pristineStrings = parseSharedStringsXml(pristineSstXml);
+  const writtenStrings = parseSharedStringsXml(writtenSstXml);
+  const sstIndexMap = mapWrittenSharedStringIndices(
+    pristineStrings,
+    writtenStrings,
+  );
+
   for (const sheetName of edited) {
     const wRel = writtenSheets.get(sheetName);
     const oRel = pristineSheets.get(sheetName);
     if (!wRel || !oRel) continue;
-    const wFile = await written.file(`xl/${wRel}`)?.async("nodebuffer");
-    if (wFile) {
-      out.file(`xl/${oRel}`, wFile);
+
+    let wXml = await written.file(`xl/${wRel}`)?.async("string");
+    const oXml = await out.file(`xl/${oRel}`)?.async("string");
+    if (!wXml || !oXml) continue;
+
+    wXml = remapSharedStringsInWorksheetXml(wXml, sstIndexMap);
+    const merged = mergeWorksheetPreservingChrome(oXml, wXml);
+    out.file(`xl/${oRel}`, merged);
+
+    const oDir = path.posix.dirname(oRel);
+    const wDir = path.posix.dirname(wRel);
+    const relsName = `_rels/${path.posix.basename(oRel)}.rels`;
+    const wRels = await written
+      .file(`xl/${wDir}/${relsName}`)
+      ?.async("nodebuffer");
+    if (wRels) {
+      out.file(`xl/${oDir}/${relsName}`, wRels);
     }
   }
 
-  const writtenShared = await written
-    .file("xl/sharedStrings.xml")
-    ?.async("nodebuffer");
-  if (writtenShared) {
-    out.file("xl/sharedStrings.xml", writtenShared);
+  if (pristineStrings.length > 0 || out.file("xl/sharedStrings.xml")) {
+    out.file("xl/sharedStrings.xml", buildSharedStringsXml(pristineStrings));
   }
-  const writtenStyles = await written.file("xl/styles.xml")?.async("nodebuffer");
-  if (writtenStyles) {
-    out.file("xl/styles.xml", writtenStyles);
-  }
+
+  // Stale calcChain + new formulas on edited sheets triggers repair; rebuild on open.
+  out.remove("xl/calcChain.xml");
 
   editedSheetNames.delete(key);
 
