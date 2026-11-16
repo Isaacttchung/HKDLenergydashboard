@@ -96,6 +96,15 @@ export function appendWebSsDateColumnExcel(
       : undefined;
   setExcelDateCellValue(headerCell, dataDate, templateHeader);
 
+  if (templateCol !== null) {
+    const width = sheet.getColumn(templateCol).width;
+    if (width) {
+      sheet.getColumn(newCol).width = width;
+    }
+  } else {
+    sheet.getColumn(newCol).width = 12;
+  }
+
   return newCol;
 }
 

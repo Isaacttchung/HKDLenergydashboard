@@ -223,7 +223,11 @@ export async function convertHccpGasMaster(
 
   const workbook = await loadGasMeterWorkbook(input.masterWorkbookPath);
   const sheet = getGasMeterSheet(workbook);
-  const excelRow = ensureGasMeterRow(sheet, consumptionDate);
+  const excelRow = ensureGasMeterRow(
+    sheet,
+    consumptionDate,
+    input.masterWorkbookPath,
+  );
   const row = sheet.getRow(excelRow);
   writeGasMeterConsumption(row, excelRow, consumption);
   if (input.outdoorAirTempC !== undefined && input.outdoorAirTempC !== null) {
@@ -263,7 +267,11 @@ export async function applyHccpGasManualFields(
 ): Promise<{ consumptionDate: string; overallOccupancy: number }> {
   const workbook = await loadGasMeterWorkbook(input.masterWorkbookPath);
   const sheet = getGasMeterSheet(workbook);
-  const excelRow = ensureGasMeterRow(sheet, input.consumptionDate);
+  const excelRow = ensureGasMeterRow(
+    sheet,
+    input.consumptionDate,
+    input.masterWorkbookPath,
+  );
   const row = sheet.getRow(excelRow);
   writeGasManualFieldsOnRow(row, excelRow, input.fields);
   await saveGasMeterWorkbook(workbook, input.masterWorkbookPath);

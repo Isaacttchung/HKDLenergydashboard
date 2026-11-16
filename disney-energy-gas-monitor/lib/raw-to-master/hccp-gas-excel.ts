@@ -3,6 +3,7 @@ import {
   loadExcelWorkbook,
   saveExcelWorkbook,
 } from "@/lib/raw-to-master/exceljs-preserve";
+import { queueTableRangePatch } from "@/lib/raw-to-master/exceljs-table-xml-preserve";
 import { excelSerialToDate } from "@/lib/datastore/parsers/excel-utils";
 import { setExcelDateCellValue } from "@/lib/raw-to-master/excel-date";
 import {
@@ -78,24 +79,12 @@ export function findGasMeterRowByDate(
   return null;
 }
 
-/** Extend the Gas Meter Reading table metadata when a row is inserted (do not call commit). */
+/** Queue a table XML range patch (applied on save; never Table#commit). */
 export function syncGasMeterTableRange(
-  sheet: ExcelJS.Worksheet,
+  masterWorkbookPath: string,
   lastDataRow: number,
 ): void {
-  const tables = sheet.getTables() as unknown as Array<{
-    table: { tableRef?: string; ref?: string; autoFilterRef?: string };
-  }>;
-  if (!tables.length) return;
-  const ref = `A1:K${lastDataRow}`;
-  const model = tables[0]!.table;
-  if (model.tableRef === ref && model.autoFilterRef === ref) return;
-  model.tableRef = ref;
-  model.autoFilterRef = ref;
-  if (model.ref) {
-    model.ref = ref;
-  }
-  // Never call Table#commit on loaded masters — table.rows is empty and commit wipes cells.
+  queueTableRangePatch(masterWorkbookPath, "table1.xml", `A1:K${lastDataRow}`);
 }
 
 function findLastDatedRow(sheet: ExcelJS.Worksheet): number | null {
@@ -112,6 +101,7 @@ function findLastDatedRow(sheet: ExcelJS.Worksheet): number | null {
 export function ensureGasMeterRow(
   sheet: ExcelJS.Worksheet,
   isoDate: string,
+  masterWorkbookPath: string,
 ): number {
   const existing = findGasMeterRowByDate(sheet, isoDate);
   if (existing !== null) return existing;
@@ -137,7 +127,7 @@ export function ensureGasMeterRow(
   setOverallOccupancyFormula(newRow, insertAt);
   setGasUnitsFormula(newRow, insertAt);
 
-  syncGasMeterTableRange(sheet, insertAt);
+  syncGasMeterTableRange(masterWorkbookPath, insertAt);
 
   return insertAt;
 }

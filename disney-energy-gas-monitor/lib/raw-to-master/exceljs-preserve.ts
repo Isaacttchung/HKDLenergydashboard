@@ -1,6 +1,10 @@
 import ExcelJS from "exceljs";
 import { readFile, writeFile } from "fs/promises";
 import { applyExcelJsTableLoadPatch } from "@/lib/raw-to-master/exceljs-table-load-patch";
+import {
+  captureWorkbookTableXml,
+  finalizeWorkbookSave,
+} from "@/lib/raw-to-master/exceljs-table-xml-preserve";
 
 applyExcelJsTableLoadPatch();
 
@@ -8,6 +12,7 @@ export async function loadExcelWorkbook(
   masterWorkbookPath: string,
 ): Promise<ExcelJS.Workbook> {
   const buffer = await readFile(masterWorkbookPath);
+  await captureWorkbookTableXml(masterWorkbookPath, buffer);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
   return workbook;
@@ -17,7 +22,8 @@ export async function saveExcelWorkbook(
   workbook: ExcelJS.Workbook,
   masterWorkbookPath: string,
 ): Promise<void> {
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  const written = Buffer.from(await workbook.xlsx.writeBuffer());
+  const buffer = await finalizeWorkbookSave(masterWorkbookPath, written);
   await writeFile(masterWorkbookPath, buffer);
 }
 
@@ -41,6 +47,14 @@ export function copyColumnPresentation(
   fromRow: number,
   toRow: number,
 ): void {
+  const srcColDef = sheet.getColumn(sourceCol);
+  const tgtColDef = sheet.getColumn(targetCol);
+  if (srcColDef.width) {
+    tgtColDef.width = srcColDef.width;
+  }
+  if (srcColDef.hidden !== undefined) {
+    tgtColDef.hidden = srcColDef.hidden;
+  }
   for (let row = fromRow; row <= toRow; row += 1) {
     copyCellPresentation(
       sheet.getRow(row).getCell(sourceCol),
