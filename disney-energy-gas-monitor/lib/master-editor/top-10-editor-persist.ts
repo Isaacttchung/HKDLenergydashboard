@@ -8,9 +8,8 @@ import {
   top10RawDataRowsOverridePath,
   type Top10RawDataRow,
 } from "@/lib/raw-to-master/load-top-10-rawdata-rows";
-import {
-  getWebSsSheet,
-} from "@/lib/raw-to-master/top-10-excel";
+import { getWebSsSheet } from "@/lib/raw-to-master/top-10-excel";
+import { WEBSS_SHEET_NAME } from "@/lib/raw-to-master/top-10-webss";
 import {
   loadExcelWorkbook,
   saveExcelWorkbook,
@@ -62,7 +61,7 @@ export async function persistTop10Edit(
     { label: TOP10_MASTER_FILENAME, absolutePath: masterPath },
     { label: "top-10-rawdata-rows.json", absolutePath: overridePath },
   ]);
-  await saveExcelWorkbook(workbook, masterPath);
+  await saveExcelWorkbook(workbook, masterPath, [WEBSS_SHEET_NAME]);
   await writeFile(overridePath, JSON.stringify(mappingRows, null, 2), "utf-8");
   clearTop10RawDataRowsCache();
   clearSolarFeedInExemptionCache();

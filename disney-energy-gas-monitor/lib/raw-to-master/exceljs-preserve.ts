@@ -1,18 +1,28 @@
 import ExcelJS from "exceljs";
+import path from "path";
 import { readFile, writeFile } from "fs/promises";
 import { applyExcelJsTableLoadPatch } from "@/lib/raw-to-master/exceljs-table-load-patch";
 import {
   captureWorkbookTableXml,
   finalizeWorkbookSave,
 } from "@/lib/raw-to-master/exceljs-table-xml-preserve";
+import {
+  markWorkbookSheetEdited,
+  mergeWorkbookFromPristine,
+  rememberPristineWorkbook,
+} from "@/lib/raw-to-master/exceljs-workbook-merge";
 
 applyExcelJsTableLoadPatch();
+
+export { markWorkbookSheetEdited };
 
 export async function loadExcelWorkbook(
   masterWorkbookPath: string,
 ): Promise<ExcelJS.Workbook> {
-  const buffer = await readFile(masterWorkbookPath);
-  await captureWorkbookTableXml(masterWorkbookPath, buffer);
+  const resolved = path.resolve(masterWorkbookPath);
+  const buffer = await readFile(resolved);
+  rememberPristineWorkbook(resolved, buffer);
+  await captureWorkbookTableXml(resolved, buffer);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
   return workbook;
@@ -21,10 +31,19 @@ export async function loadExcelWorkbook(
 export async function saveExcelWorkbook(
   workbook: ExcelJS.Workbook,
   masterWorkbookPath: string,
+  editedSheetNames?: string[],
 ): Promise<void> {
+  const resolved = path.resolve(masterWorkbookPath);
+  if (editedSheetNames?.length) {
+    for (const name of editedSheetNames) {
+      markWorkbookSheetEdited(resolved, name);
+    }
+  }
   const written = Buffer.from(await workbook.xlsx.writeBuffer());
-  const buffer = await finalizeWorkbookSave(masterWorkbookPath, written);
-  await writeFile(masterWorkbookPath, buffer);
+  let buffer = await mergeWorkbookFromPristine(resolved, written);
+  buffer = await finalizeWorkbookSave(resolved, buffer);
+  await writeFile(resolved, buffer);
+  rememberPristineWorkbook(resolved, buffer);
 }
 
 /** Copy number format, fill, font, border, alignment (not value). */

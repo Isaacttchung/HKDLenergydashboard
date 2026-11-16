@@ -174,8 +174,16 @@ export function writeGasManualFieldsOnRow(
   };
 }
 
+export const GAS_METER_SHEET = "Gas Meter Reading";
+
 export const loadGasMeterWorkbook = loadExcelWorkbook;
-export const saveGasMeterWorkbook = saveExcelWorkbook;
+
+export async function saveGasMeterWorkbook(
+  workbook: ExcelJS.Workbook,
+  masterWorkbookPath: string,
+): Promise<void> {
+  await saveExcelWorkbook(workbook, masterWorkbookPath, [GAS_METER_SHEET]);
+}
 
 export function getGasMeterSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet {
   const sheet = workbook.getWorksheet("Gas Meter Reading");

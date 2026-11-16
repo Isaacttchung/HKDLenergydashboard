@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import path from "path";
 
 const TABLE_DIR = "xl/tables/";
 
@@ -8,13 +9,18 @@ const tableXmlByWorkbookPath = new Map<string, Map<string, Buffer>>();
 /** Optional table range patches before merge (e.g. extend Gas Meter Reading table). */
 const tableRangePatches = new Map<string, Record<string, string>>();
 
+function resolveMasterPath(masterWorkbookPath: string): string {
+  return path.resolve(masterWorkbookPath);
+}
+
 export async function captureWorkbookTableXml(
   masterWorkbookPath: string,
   xlsxBuffer: Buffer,
 ): Promise<void> {
+  const key = resolveMasterPath(masterWorkbookPath);
   const map = await readTableXmlFromBuffer(xlsxBuffer);
   if (map.size > 0) {
-    tableXmlByWorkbookPath.set(masterWorkbookPath, map);
+    tableXmlByWorkbookPath.set(key, map);
   }
 }
 
@@ -23,9 +29,10 @@ export function queueTableRangePatch(
   tableFileName: string,
   rangeRef: string,
 ): void {
-  const entry = tableRangePatches.get(masterWorkbookPath) ?? {};
+  const key = resolveMasterPath(masterWorkbookPath);
+  const entry = tableRangePatches.get(key) ?? {};
   entry[tableFileName] = rangeRef;
-  tableRangePatches.set(masterWorkbookPath, entry);
+  tableRangePatches.set(key, entry);
 }
 
 export function patchTableXmlRange(xml: string, rangeRef: string): string {
@@ -87,28 +94,26 @@ export async function finalizeWorkbookSave(
   masterWorkbookPath: string,
   writtenBuffer: Buffer,
 ): Promise<Buffer> {
-  let originalTables = tableXmlByWorkbookPath.get(masterWorkbookPath);
+  const key = resolveMasterPath(masterWorkbookPath);
+  let originalTables = tableXmlByWorkbookPath.get(key);
   if (!originalTables || originalTables.size === 0) {
     try {
       const { readFile } = await import("fs/promises");
-      const onDisk = await readFile(masterWorkbookPath);
+      const onDisk = await readFile(key);
       originalTables = await readTableXmlFromBuffer(onDisk);
     } catch {
       return writtenBuffer;
     }
   }
 
-  const patches = tableRangePatches.get(masterWorkbookPath) ?? {};
-  tableRangePatches.delete(masterWorkbookPath);
+  const patches = tableRangePatches.get(key) ?? {};
+  tableRangePatches.delete(key);
 
   const merged = await mergePreservedTableXml(
     writtenBuffer,
     originalTables,
     patches,
   );
-  tableXmlByWorkbookPath.set(
-    masterWorkbookPath,
-    await readTableXmlFromBuffer(merged),
-  );
+  tableXmlByWorkbookPath.set(key, await readTableXmlFromBuffer(merged));
   return merged;
 }

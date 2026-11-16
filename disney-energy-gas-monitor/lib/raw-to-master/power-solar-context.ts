@@ -203,7 +203,7 @@ export async function updatePowerSolarContextColumns(
   } catch {
   }
 
-  await saveExcelWorkbook(workbook, masterWorkbookPath);
+  await saveExcelWorkbook(workbook, masterWorkbookPath, ["Hotel", "Park"]);
 
   return { hotelRow, parkRow };
 }

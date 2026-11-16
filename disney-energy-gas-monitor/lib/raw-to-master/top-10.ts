@@ -19,7 +19,10 @@ import {
 } from "@/lib/raw-to-master/csv-column-delta";
 import { FeedInTariffLookup } from "@/lib/raw-to-master/feed-in-tariff-lookup";
 import { logicalIdForTop10Link } from "@/lib/raw-to-master/top-10-link-map";
-import { normalizeTop10Location } from "@/lib/raw-to-master/top-10-webss";
+import {
+  normalizeTop10Location,
+  WEBSS_SHEET_NAME,
+} from "@/lib/raw-to-master/top-10-webss";
 
 import { outdoorAirTempFromDaily1Csv } from "@/lib/raw-to-master/outdoor-air-temp";
 import {
@@ -257,7 +260,7 @@ export async function convertTop10Master(
     }
   }
 
-  await saveExcelWorkbook(workbook, input.masterWorkbookPath);
+  await saveExcelWorkbook(workbook, input.masterWorkbookPath, [WEBSS_SHEET_NAME]);
 
   return {
     dataDate: input.dataDate,

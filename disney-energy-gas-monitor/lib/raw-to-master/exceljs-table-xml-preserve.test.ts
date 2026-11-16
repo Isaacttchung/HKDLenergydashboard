@@ -30,7 +30,7 @@ test("gas save preserves full 11-column table XML", async () => {
     meter2: 200,
     gasConsumptionUnits: 300,
   });
-  await saveExcelWorkbook(wb, copyPath);
+  await saveExcelWorkbook(wb, copyPath, ["Gas Meter Reading"]);
 
   const unzip = join(dir, "unz");
   execSync(`rm -rf "${unzip}" && mkdir -p "${unzip}" && unzip -q "${copyPath}" -d "${unzip}"`);

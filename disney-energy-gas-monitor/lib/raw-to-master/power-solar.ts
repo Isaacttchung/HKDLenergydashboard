@@ -291,7 +291,12 @@ export async function convertPowerSolarMaster(
     if (wroteInArea) areasUpdated.add(area);
   }
 
-  await saveExcelWorkbook(workbook, input.masterWorkbookPath);
+  await saveExcelWorkbook(workbook, input.masterWorkbookPath, [
+    "CCP",
+    "HCCP",
+    "Hotel",
+    "Park",
+  ]);
 
   return {
     dataDate: input.dataDate,
