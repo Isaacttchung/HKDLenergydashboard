@@ -4,7 +4,7 @@ import {
   saveExcelWorkbook,
 } from "@/lib/raw-to-master/exceljs-preserve";
 import { excelSerialToDate } from "@/lib/datastore/parsers/excel-utils";
-import { isoDateToExcelSerial } from "@/lib/raw-to-master/excel-date";
+import { setExcelDateCellValue } from "@/lib/raw-to-master/excel-date";
 import {
   computeHccpOverallOccupancy,
   type HccpGasManualFields,
@@ -78,6 +78,26 @@ export function findGasMeterRowByDate(
   return null;
 }
 
+/** Extend the Gas Meter Reading table metadata when a row is inserted (do not call commit). */
+export function syncGasMeterTableRange(
+  sheet: ExcelJS.Worksheet,
+  lastDataRow: number,
+): void {
+  const tables = sheet.getTables() as unknown as Array<{
+    table: { tableRef?: string; ref?: string; autoFilterRef?: string };
+  }>;
+  if (!tables.length) return;
+  const ref = `A1:K${lastDataRow}`;
+  const model = tables[0]!.table;
+  if (model.tableRef === ref && model.autoFilterRef === ref) return;
+  model.tableRef = ref;
+  model.autoFilterRef = ref;
+  if (model.ref) {
+    model.ref = ref;
+  }
+  // Never call Table#commit on loaded masters — table.rows is empty and commit wipes cells.
+}
+
 function findLastDatedRow(sheet: ExcelJS.Worksheet): number | null {
   let last: number | null = null;
   const rowCount = sheet.rowCount;
@@ -107,13 +127,17 @@ export function ensureGasMeterRow(
   const newRow = sheet.getRow(insertAt);
   copyRowPresentation(templateRow, newRow);
 
-  const serial = isoDateToExcelSerial(isoDate);
-  const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
-  newRow.getCell(GAS_COL.date).value = utc;
+  setExcelDateCellValue(
+    newRow.getCell(GAS_COL.date),
+    isoDate,
+    templateRow.getCell(GAS_COL.date),
+  );
 
   setThirtyDaysFormula(newRow, insertAt);
   setOverallOccupancyFormula(newRow, insertAt);
   setGasUnitsFormula(newRow, insertAt);
+
+  syncGasMeterTableRange(sheet, insertAt);
 
   return insertAt;
 }

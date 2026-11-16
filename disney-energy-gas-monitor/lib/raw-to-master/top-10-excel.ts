@@ -2,7 +2,7 @@ import type ExcelJS from "exceljs";
 import { excelSerialToDate, normalizeHeader } from "@/lib/datastore/parsers/excel-utils";
 import {
   excelSerialMatchesIsoDate,
-  isoDateToExcelSerial,
+  setExcelDateCellValue,
 } from "@/lib/raw-to-master/excel-date";
 import { copyColumnPresentation } from "@/lib/raw-to-master/exceljs-preserve";
 import {
@@ -89,9 +89,12 @@ export function appendWebSsDateColumnExcel(
     );
   }
 
-  const serial = isoDateToExcelSerial(dataDate);
-  const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
-  sheet.getRow(WEBSS_DATE_HEADER_ROW).getCell(newCol).value = utc;
+  const headerCell = sheet.getRow(WEBSS_DATE_HEADER_ROW).getCell(newCol);
+  const templateHeader =
+    templateCol !== null
+      ? sheet.getRow(WEBSS_DATE_HEADER_ROW).getCell(templateCol)
+      : undefined;
+  setExcelDateCellValue(headerCell, dataDate, templateHeader);
 
   return newCol;
 }

@@ -231,6 +231,19 @@ export async function convertHccpGasMaster(
   }
   await saveGasMeterWorkbook(workbook, input.masterWorkbookPath);
 
+  const verify = await loadGasMeterWorkbook(input.masterWorkbookPath);
+  const verifySheet = getGasMeterSheet(verify);
+  let datedRows = 0;
+  for (let row = 2; row <= Math.min(verifySheet.rowCount, 50); row += 1) {
+    if (verifySheet.getRow(row).getCell(1).value != null) datedRows += 1;
+  }
+  if (datedRows < 10) {
+    throw new HccpGasConversionError(
+      "Gas master save failed integrity check (Gas Meter Reading appears empty). Restore the workbook from backup and retry.",
+      "MISSING_SHEET",
+    );
+  }
+
   return {
     consumptionDate,
     meter1: consumption.meter1,

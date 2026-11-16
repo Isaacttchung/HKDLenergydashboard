@@ -5,7 +5,7 @@ import {
 } from "@/lib/datastore/parsers/excel-utils";
 import {
   excelSerialMatchesIsoDate,
-  isoDateToExcelSerial,
+  setExcelDateCellValue,
 } from "@/lib/raw-to-master/excel-date";
 import {
   copyRowPresentationExcel,
@@ -78,9 +78,8 @@ export function ensurePowerSolarDateRow(
   const newRow = sheet.getRow(insertAt);
   copyRowPresentationExcel(template, newRow);
 
-  const serial = isoDateToExcelSerial(dataDate);
-  const utc = new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
-  newRow.getCell(1).value = utc;
+  const dateCell = newRow.getCell(1);
+  setExcelDateCellValue(dateCell, dataDate, template.getCell(1));
 
   return insertAt;
 }

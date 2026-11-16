@@ -19,6 +19,14 @@ export function normalizeHeader(header: unknown): string {
 export function excelSerialToDate(serial: unknown): string | null {
   if (serial === "" || serial === null || serial === undefined) return null;
 
+  if (serial instanceof Date) {
+    if (!Number.isFinite(serial.getTime())) return null;
+    const y = serial.getUTCFullYear();
+    const m = String(serial.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(serial.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
   if (typeof serial === "string") {
     const trimmed = serial.trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
