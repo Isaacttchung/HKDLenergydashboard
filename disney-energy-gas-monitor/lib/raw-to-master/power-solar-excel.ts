@@ -7,10 +7,7 @@ import {
   excelSerialMatchesIsoDate,
   setExcelDateCellValue,
 } from "@/lib/raw-to-master/excel-date";
-import {
-  copyRowPresentationExcel,
-  copyCellPresentation,
-} from "@/lib/raw-to-master/exceljs-preserve";
+import { copyCellPresentation } from "@/lib/raw-to-master/exceljs-preserve";
 import {
   POWER_SOLAR_SHEET_CONFIG,
   type PowerSolarArea,
@@ -76,7 +73,9 @@ export function ensurePowerSolarDateRow(
   sheet.spliceRows(insertAt, 0, []);
   const template = sheet.getRow(templateRow);
   const newRow = sheet.getRow(insertAt);
-  copyRowPresentationExcel(template, newRow);
+  if (template.height) {
+    newRow.height = template.height;
+  }
 
   const dateCell = newRow.getCell(1);
   setExcelDateCellValue(dateCell, dataDate, template.getCell(1));

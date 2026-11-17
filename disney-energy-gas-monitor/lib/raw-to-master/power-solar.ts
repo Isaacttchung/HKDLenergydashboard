@@ -236,7 +236,9 @@ export async function convertPowerSolarMaster(
         );
       }
 
-      setNumericCellExcel(sheet, dataRow, col, value, styleColFor(col));
+      const displayValue =
+        area === "Park" ? value : Math.round(value);
+      setNumericCellExcel(sheet, dataRow, col, displayValue, styleColFor(col));
       metersWritten += 1;
       wroteInArea = true;
     }
@@ -253,7 +255,13 @@ export async function convertPowerSolarMaster(
         }
         const subCol = headerMap.get(normalizeHeader(group.subtotalHeader));
         if (subCol !== undefined) {
-          setNumericCellExcel(sheet, dataRow, subCol, subtotal, styleColFor(subCol));
+          setNumericCellExcel(
+            sheet,
+            dataRow,
+            subCol,
+            Math.round(subtotal),
+            styleColFor(subCol),
+          );
         }
       }
     }
@@ -261,7 +269,13 @@ export async function convertPowerSolarMaster(
     const totalHeader = POWER_SOLAR_AREA_TOTAL_HEADERS[area];
     const totalCol = headerMap.get(normalizeHeader(totalHeader));
     if (totalCol !== undefined && wroteInArea) {
-      setNumericCellExcel(sheet, dataRow, totalCol, areaSum, styleColFor(totalCol));
+      setNumericCellExcel(
+        sheet,
+        dataRow,
+        totalCol,
+        area === "Park" ? areaSum : Math.round(areaSum),
+        styleColFor(totalCol),
+      );
     }
 
     if (area === "Hotel" && wroteInArea) {

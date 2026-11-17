@@ -40,6 +40,63 @@ function buildCellXml(col: string, rowNum: string, attrs: string, inner: string)
   return `<c r="${col}${rowNum}"${attrPart}>${inner}</c>`;
 }
 
+function cellValueSerial(inner: string): number | null {
+  const m = inner.match(/<v>(-?\d+(?:\.\d+)?)<\/v>/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Date headers on WebSS row 1 use Excel serials; data rows use kWh decimals. */
+function looksLikeExcelDateSerial(serial: number): boolean {
+  return serial >= 40_000 && serial <= 60_000;
+}
+
+function styleTemplateAttrs(
+  col: string,
+  w: { attrs: string; inner: string },
+  pCells: Map<string, { attrs: string; inner: string }>,
+  wCells: Map<string, { attrs: string; inner: string }>,
+  tCells: Map<string, { attrs: string; inner: string }>,
+): string | undefined {
+  const prevColCell = tCells.get(col);
+  const leftCol = previousExcelColumn(col);
+  const leftStyle =
+    (leftCol && pCells.get(leftCol)?.attrs) ??
+    (leftCol && wCells.get(leftCol)?.attrs);
+
+  const writtenSerial = cellValueSerial(w.inner);
+  const prevSerial = prevColCell
+    ? cellValueSerial(prevColCell.inner)
+    : null;
+  if (
+    prevColCell &&
+    prevSerial !== null &&
+    writtenSerial !== null &&
+    looksLikeExcelDateSerial(prevSerial) &&
+    !looksLikeExcelDateSerial(writtenSerial)
+  ) {
+    return leftStyle ?? prevColCell.attrs;
+  }
+
+  return prevColCell?.attrs ?? leftStyle;
+}
+
+function mergeColsFromWritten(
+  pristineWorksheetXml: string,
+  writtenWorksheetXml: string,
+): string {
+  const writtenCols = writtenWorksheetXml.match(/<cols>[\s\S]*?<\/cols>/)?.[0];
+  if (!writtenCols) return pristineWorksheetXml;
+  if (pristineWorksheetXml.includes("<cols>")) {
+    return pristineWorksheetXml.replace(/<cols>[\s\S]*?<\/cols>/, writtenCols);
+  }
+  return pristineWorksheetXml.replace(
+    /(<sheetFormatPr[^/]*\/>)/,
+    `$1${writtenCols}`,
+  );
+}
+
 function mergeCellAttrs(
   writtenAttrs: string,
   pristineAttrs: string | undefined,
@@ -62,6 +119,7 @@ function mergeRowXml(
   writtenInner: string,
   pristineInner: string | undefined,
   templateInner: string | undefined,
+  preserveColumnValues?: ReadonlySet<string>,
 ): string {
   const wCells = parseCells(writtenInner);
   const pCells = pristineInner ? parseCells(pristineInner) : new Map();
@@ -81,15 +139,13 @@ function mergeRowXml(
       }
       continue;
     }
-    const leftCol = previousExcelColumn(col);
-    const leftNeighborStyle =
-      (leftCol && pCells.get(leftCol)?.attrs) ??
-      (leftCol && wCells.get(leftCol)?.attrs);
-    const attrs = mergeCellAttrs(
-      w.attrs,
-      pCells.get(col)?.attrs,
-      leftNeighborStyle ?? tCells.get(col)?.attrs,
-    );
+    const pristineCell = pCells.get(col);
+    if (preserveColumnValues?.has(col) && pristineCell) {
+      parts.push(buildCellXml(col, rowNum, pristineCell.attrs, pristineCell.inner));
+      continue;
+    }
+    const templateStyle = styleTemplateAttrs(col, w, pCells, wCells, tCells);
+    const attrs = mergeCellAttrs(w.attrs, pristineCell?.attrs, templateStyle);
     parts.push(buildCellXml(col, rowNum, attrs, w.inner));
   }
   return `<row r="${rowNum}"${rowAttrs}>${parts.join("")}</row>`;
@@ -122,6 +178,7 @@ function maxRowNum(rows: Map<string, { attrs: string; inner: string }>): number 
 export function mergeWorksheetPreservingCellStyles(
   pristineWorksheetXml: string,
   writtenWorksheetXml: string,
+  options?: { preserveColumnValues?: ReadonlySet<string> },
 ): string {
   const writtenData = writtenWorksheetXml.match(
     /<sheetData[\s\S]*?<\/sheetData>/,
@@ -163,6 +220,7 @@ export function mergeWorksheetPreservingCellStyles(
         w.inner,
         p?.inner,
         prevTemplate,
+        options?.preserveColumnValues,
       ),
     );
   }
@@ -173,6 +231,7 @@ export function mergeWorksheetPreservingCellStyles(
     /<sheetData[\s\S]*?<\/sheetData>/,
     newSheetData,
   );
+  out = mergeColsFromWritten(out, writtenWorksheetXml);
   if (writtenDim) {
     if (out.includes("<dimension ")) {
       out = out.replace(

@@ -117,7 +117,11 @@ export async function mergeWorkbookFromPristine(
     const dimensionRef = wXml.match(
       /<dimension ref="([^"]+)"[^/]*\/>/,
     )?.[1];
-    let merged = mergeWorksheetPreservingCellStyles(oXml, wXml);
+    const preserveLeading =
+      sheetName === "WebSS_Data" ? new Set(["A", "B"]) : undefined;
+    let merged = mergeWorksheetPreservingCellStyles(oXml, wXml, {
+      preserveColumnValues: preserveLeading,
+    });
     if (dimensionRef) {
       merged = patchWorksheetAutoFilter(merged, dimensionRef);
     }
