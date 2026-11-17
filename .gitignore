@@ -1,0 +1,6 @@
+# Historical patch exports — keep in Cursor Agent Store, not in git
+*.patch
+
+# OS / editor
+.DS_Store
+Thumbs.db

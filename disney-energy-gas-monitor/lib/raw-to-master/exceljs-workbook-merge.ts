@@ -6,6 +6,7 @@ import {
   parseSharedStringsXml,
   remapSharedStringsInWorksheetXml,
 } from "@/lib/raw-to-master/exceljs-shared-strings";
+import { mergeWorksheetPreservingCellStyles } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
 
 /** Pristine package bytes when the workbook was first loaded this process. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
@@ -62,39 +63,6 @@ async function sheetNameToWorksheetPath(
   return map;
 }
 
-/** Keep layout chrome; take data + dimension from the ExcelJS worksheet. */
-function mergeWorksheetPreservingChrome(
-  pristineWorksheetXml: string,
-  writtenWorksheetXml: string,
-): string {
-  const writtenData = writtenWorksheetXml.match(
-    /<sheetData[\s\S]*?<\/sheetData>/,
-  )?.[0];
-  const writtenDim = writtenWorksheetXml.match(
-    /<dimension ref="([^"]+)"[^/]*\/>/,
-  );
-  if (!writtenData) return pristineWorksheetXml;
-
-  let out = pristineWorksheetXml.replace(
-    /<sheetData[\s\S]*?<\/sheetData>/,
-    writtenData,
-  );
-  if (writtenDim) {
-    if (out.includes("<dimension ")) {
-      out = out.replace(
-        /<dimension ref="([^"]+)"[^/]*\/>/,
-        `<dimension ref="${writtenDim[1]!}"/>`,
-      );
-    } else {
-      out = out.replace(
-        /(<worksheet[^>]*>)/,
-        `$1<dimension ref="${writtenDim[1]!}"/>`,
-      );
-    }
-  }
-  return out;
-}
-
 /**
  * Keep charts, pivots, SharePoint metadata, and untouched sheets from the
  * pristine workbook. Merge only edited sheetData + extend sharedStrings for
@@ -137,7 +105,7 @@ export async function mergeWorkbookFromPristine(
     if (!wXml || !oXml) continue;
 
     wXml = remapSharedStringsInWorksheetXml(wXml, sstIndexMap);
-    const merged = mergeWorksheetPreservingChrome(oXml, wXml);
+    const merged = mergeWorksheetPreservingCellStyles(oXml, wXml);
     out.file(`xl/${oRel}`, merged);
 
     const oDir = path.posix.dirname(oRel);

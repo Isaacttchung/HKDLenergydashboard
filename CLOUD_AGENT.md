@@ -16,7 +16,7 @@ This Cursor Cloud workspace tracks **[Isaacttchung/HKDLenergydashboard](https://
 2. **Commit locally** — Use clear commit messages on branch `main` (or a branch you request).
 3. **Publish when you ask**
    - **Push to GitHub** — `git push origin main` (only when you explicitly request it).
-   - **Patch for your PC** — `git format-patch origin/main -o /opt/cursor/artifacts` or `git diff > /opt/cursor/artifacts/hkdl-changes.patch` for manual apply.
+   - **Patch for your PC** — export to **Cursor Agent Store** `artifacts/` (or a local folder **outside** the repo). Do **not** commit `*.patch` files — they are not used at runtime and clutter `git pull` / `git apply`.
 
 ## Sync from GitHub
 
