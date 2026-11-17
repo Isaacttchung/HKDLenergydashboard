@@ -62,8 +62,8 @@ function styleTemplateAttrs(
   const prevColCell = tCells.get(col);
   const leftCol = previousExcelColumn(col);
   const leftStyle =
-    (leftCol && pCells.get(leftCol)?.attrs) ??
-    (leftCol && wCells.get(leftCol)?.attrs);
+    (leftCol ? pCells.get(leftCol)?.attrs : undefined) ??
+    (leftCol ? wCells.get(leftCol)?.attrs : undefined);
 
   const writtenSerial = cellValueSerial(w.inner);
   const prevSerial = prevColCell
