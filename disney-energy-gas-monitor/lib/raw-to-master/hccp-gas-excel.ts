@@ -11,6 +11,10 @@ import {
   type HccpGasManualFields,
 } from "@/lib/raw-to-master/hccp-gas-manual";
 import type { HccpGasDailyConsumption } from "@/lib/raw-to-master/hccp-gas";
+import {
+  gasThirtyDaysFormulaResult,
+  refreshGasMeterFormulaCaches,
+} from "@/lib/raw-to-master/gas-formula-cache";
 
 export const GAS_COL = {
   date: 1,
@@ -49,21 +53,30 @@ function copyRowPresentation(source: ExcelJS.Row, target: ExcelJS.Row): void {
 }
 
 function setThirtyDaysFormula(row: ExcelJS.Row, excelRow: number): void {
+  const rowIso = isoFromCellValue(row.getCell(GAS_COL.date).value);
+  const result = rowIso ? gasThirtyDaysFormulaResult(rowIso) : false;
   row.getCell(GAS_COL.thirtyDays).value = {
     formula: `AND(A${excelRow}>=(TODAY()-30),A${excelRow}<TODAY())`,
-    result: true,
+    result,
   };
 }
 
 function setOverallOccupancyFormula(row: ExcelJS.Row, excelRow: number): void {
+  const dlh = Number(row.getCell(GAS_COL.dlh).value) || 0;
+  const del = Number(row.getCell(GAS_COL.del).value) || 0;
+  const dhh = Number(row.getCell(GAS_COL.dhh).value) || 0;
   row.getCell(GAS_COL.overall).value = {
     formula: `((D${excelRow}*400)+(E${excelRow}*750)+(F${excelRow}*600))/1750`,
+    result: ((dlh * 400) + (del * 750) + (dhh * 600)) / 1750,
   };
 }
 
 function setGasUnitsFormula(row: ExcelJS.Row, excelRow: number): void {
+  const meter1 = Number(row.getCell(GAS_COL.meter1).value) || 0;
+  const meter2 = Number(row.getCell(GAS_COL.meter2).value) || 0;
   row.getCell(GAS_COL.gasUnits).value = {
     formula: `I${excelRow}+J${excelRow}`,
+    result: meter1 + meter2,
   };
 }
 
@@ -182,6 +195,9 @@ export async function saveGasMeterWorkbook(
   workbook: ExcelJS.Workbook,
   masterWorkbookPath: string,
 ): Promise<void> {
+  const sheet = getGasMeterSheet(workbook);
+  refreshGasMeterFormulaCaches(sheet);
+  workbook.calcProperties.fullCalcOnLoad = true;
   await saveExcelWorkbook(workbook, masterWorkbookPath, [GAS_METER_SHEET]);
 }
 

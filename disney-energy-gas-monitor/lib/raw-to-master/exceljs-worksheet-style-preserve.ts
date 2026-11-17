@@ -4,6 +4,8 @@
  * Copy values/formulas from the written row but keep pristine cell `s` styles.
  */
 
+import { previousExcelColumn } from "@/lib/raw-to-master/excel-column";
+
 const ROW_RE = /<row r="(\d+)"([^>]*)>([\s\S]*?)<\/row>/g;
 const CELL_RE =
   /<c r="([A-Z]+)(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
@@ -79,10 +81,14 @@ function mergeRowXml(
       }
       continue;
     }
+    const leftCol = previousExcelColumn(col);
+    const leftNeighborStyle =
+      (leftCol && pCells.get(leftCol)?.attrs) ??
+      (leftCol && wCells.get(leftCol)?.attrs);
     const attrs = mergeCellAttrs(
       w.attrs,
       pCells.get(col)?.attrs,
-      tCells.get(col)?.attrs,
+      leftNeighborStyle ?? tCells.get(col)?.attrs,
     );
     parts.push(buildCellXml(col, rowNum, attrs, w.inner));
   }

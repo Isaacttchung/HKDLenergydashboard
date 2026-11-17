@@ -43,7 +43,6 @@ export async function saveExcelWorkbook(
   let buffer = await mergeWorkbookFromPristine(resolved, written);
   buffer = await finalizeWorkbookSave(resolved, buffer);
   await writeFile(resolved, buffer);
-  rememberPristineWorkbook(resolved, buffer);
 }
 
 /** Copy number format, fill, font, border, alignment (not value). */

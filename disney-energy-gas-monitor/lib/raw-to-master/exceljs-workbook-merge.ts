@@ -6,22 +6,29 @@ import {
   parseSharedStringsXml,
   remapSharedStringsInWorksheetXml,
 } from "@/lib/raw-to-master/exceljs-shared-strings";
+import { patchFilterDatabaseDefinedName } from "@/lib/raw-to-master/exceljs-workbook-defined-names";
+import { patchWorksheetAutoFilter } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
 import { mergeWorksheetPreservingCellStyles } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
 
-/** Pristine package bytes when the workbook was first loaded this process. */
+/** On-disk master bytes used as the merge baseline for the current edit session. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
 
 /** Sheet names whose worksheet XML should come from the ExcelJS write. */
 const editedSheetNames = new Map<string, Set<string>>();
 
+/** Refreshed on every load so a later partial save cannot revert other sheets. */
 export function rememberPristineWorkbook(
   masterWorkbookPath: string,
   buffer: Buffer,
 ): void {
   const key = path.resolve(masterWorkbookPath);
-  if (!pristineWorkbookBuffer.has(key)) {
-    pristineWorkbookBuffer.set(key, Buffer.from(buffer));
-  }
+  pristineWorkbookBuffer.set(key, Buffer.from(buffer));
+}
+
+/** @internal test hook */
+export function clearPristineWorkbookCacheForTests(): void {
+  pristineWorkbookBuffer.clear();
+  editedSheetNames.clear();
 }
 
 export function markWorkbookSheetEdited(
@@ -95,6 +102,8 @@ export async function mergeWorkbookFromPristine(
     writtenStrings,
   );
 
+  let workbookXml = (await out.file("xl/workbook.xml")?.async("string")) ?? "";
+
   for (const sheetName of edited) {
     const wRel = writtenSheets.get(sheetName);
     const oRel = pristineSheets.get(sheetName);
@@ -105,8 +114,24 @@ export async function mergeWorkbookFromPristine(
     if (!wXml || !oXml) continue;
 
     wXml = remapSharedStringsInWorksheetXml(wXml, sstIndexMap);
-    const merged = mergeWorksheetPreservingCellStyles(oXml, wXml);
+    const dimensionRef = wXml.match(
+      /<dimension ref="([^"]+)"[^/]*\/>/,
+    )?.[1];
+    let merged = mergeWorksheetPreservingCellStyles(oXml, wXml);
+    if (dimensionRef) {
+      merged = patchWorksheetAutoFilter(merged, dimensionRef);
+    }
     out.file(`xl/${oRel}`, merged);
+
+    const mergedDimension =
+      merged.match(/<dimension ref="([^"]+)"[^/]*\/>/)?.[1] ?? dimensionRef;
+    if (mergedDimension && workbookXml) {
+      workbookXml = patchFilterDatabaseDefinedName(
+        workbookXml,
+        sheetName,
+        mergedDimension,
+      );
+    }
 
     const oDir = path.posix.dirname(oRel);
     const wDir = path.posix.dirname(wRel);
@@ -125,6 +150,32 @@ export async function mergeWorkbookFromPristine(
 
   // Stale calcChain + new formulas on edited sheets triggers repair; rebuild on open.
   out.remove("xl/calcChain.xml");
+
+  if (workbookXml) {
+    out.file("xl/workbook.xml", workbookXml);
+  }
+
+  const wbXml = workbookXml || ((await out.file("xl/workbook.xml")?.async("string")) ?? "");
+  if (wbXml.includes("<calcPr")) {
+    const patched = wbXml.replace(
+      /<calcPr([^>]*)\/>/,
+      (tag) => {
+        if (tag.includes("fullCalcOnLoad")) return tag;
+        return tag.replace(/\/>$/, ' fullCalcOnLoad="1"/>');
+      },
+    );
+    if (patched !== wbXml) {
+      out.file("xl/workbook.xml", patched);
+    }
+  } else if (wbXml.includes("</workbook>")) {
+    out.file(
+      "xl/workbook.xml",
+      wbXml.replace(
+        "</workbook>",
+        '<calcPr calcId="171027" fullCalcOnLoad="1"/></workbook>',
+      ),
+    );
+  }
 
   editedSheetNames.delete(key);
 
