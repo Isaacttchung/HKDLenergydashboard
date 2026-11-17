@@ -7,8 +7,14 @@ import {
   remapSharedStringsInWorksheetXml,
 } from "@/lib/raw-to-master/exceljs-shared-strings";
 import { patchFilterDatabaseDefinedName } from "@/lib/raw-to-master/exceljs-workbook-defined-names";
-import { patchWorksheetAutoFilter } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
-import { mergeWorksheetPreservingCellStyles } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
+import {
+  ensureWorksheetAutoFilter,
+  patchWorksheetAutoFilter,
+} from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
+import {
+  mergeWorksheetPreservingCellStyles,
+  patchPowerSolarParkSheetView,
+} from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
 
 /** On-disk master bytes used as the merge baseline for the current edit session. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
@@ -123,7 +129,13 @@ export async function mergeWorkbookFromPristine(
       preserveColumnValues: preserveLeading,
     });
     if (dimensionRef) {
-      merged = patchWorksheetAutoFilter(merged, dimensionRef);
+      merged =
+        sheetName === "WebSS_Data"
+          ? ensureWorksheetAutoFilter(merged, dimensionRef)
+          : patchWorksheetAutoFilter(merged, dimensionRef);
+    }
+    if (sheetName === "Park") {
+      merged = patchPowerSolarParkSheetView(merged);
     }
     out.file(`xl/${oRel}`, merged);
 

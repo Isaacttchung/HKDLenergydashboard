@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeWorksheetPreservingCellStyles } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
+import {
+  mergeWorksheetPreservingCellStyles,
+  patchPowerSolarParkSheetView,
+} from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
 
 test("mergeWorksheetPreservingCellStyles keeps pristine s= on updated values", () => {
   const pristine = `<?xml version="1.0"?><worksheet><sheetViews/><sheetData><row r="2"><c r="E2" s="28"><v>1</v></c></row></sheetData></worksheet>`;
@@ -38,4 +41,21 @@ test("mergeWorksheetPreservingCellStyles clones style from left column for new c
   assert.match(out, /r="D2" s="16"/);
   assert.match(out, /<v>46337<\/v>/);
   assert.match(out, /<v>12\.3456<\/v>/);
+});
+
+test("mergeWorksheetPreservingCellStyles orders columns before AA", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><sheetData><row r="2"><c r="B2" s="1"><v>1</v></c></row></sheetData></worksheet>`;
+  const written = `<?xml version="1.0"?><worksheet><sheetData><row r="2"><c r="AB2" s="2"><v>0</v></c><c r="B2" s="1"><v>1</v></c></row></sheetData></worksheet>`;
+  const out = mergeWorksheetPreservingCellStyles(pristine, written);
+  const idxB = out.indexOf('r="B2"');
+  const idxAb = out.indexOf('r="AB2"');
+  assert.ok(idxB >= 0 && idxAb >= 0 && idxB < idxAb);
+});
+
+test("patchPowerSolarParkSheetView resets frozen pane anchor", () => {
+  const xml = `<?xml version="1.0"?><worksheet><sheetViews><sheetView><pane topLeftCell="W3046"/><selection pane="topRight" activeCell="U58" sqref="U58"/></sheetView></sheetViews></worksheet>`;
+  const out = patchPowerSolarParkSheetView(xml);
+  assert.match(out, /topLeftCell="B2"/);
+  assert.match(out, /activeCell="A2"/);
+  assert.doesNotMatch(out, /pane="topRight"/);
 });

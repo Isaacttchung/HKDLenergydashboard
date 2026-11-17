@@ -7,6 +7,7 @@
 import {
   maxColumnIndexInColsXml,
   previousExcelColumn,
+  sortExcelColumns,
 } from "@/lib/raw-to-master/excel-column";
 
 const ROW_RE = /<row r="(\d+)"([^>]*)>([\s\S]*?)<\/row>/g;
@@ -165,7 +166,7 @@ function mergeRowXml(
   }
 
   const parts: string[] = [];
-  for (const col of [...cols].sort()) {
+  for (const col of sortExcelColumns(cols)) {
     const w = wCells.get(col);
     if (!w) {
       const keep = pCells.get(col);
@@ -176,7 +177,9 @@ function mergeRowXml(
     }
     const pristineCell = pCells.get(col);
     if (preserveColumnValues?.has(col) && pristineCell) {
-      parts.push(buildCellXml(col, rowNum, pristineCell.attrs, pristineCell.inner));
+      const attrs = mergeCellAttrs(w.attrs, pristineCell.attrs, pristineCell.attrs);
+      const inner = rowHasCellPayload(w.inner) ? w.inner : pristineCell.inner;
+      parts.push(buildCellXml(col, rowNum, attrs, inner));
       continue;
     }
     const templateStyle = styleTemplateAttrs(col, w, pCells, wCells, tCells);
@@ -283,5 +286,23 @@ export function mergeWorksheetPreservingCellStyles(
       );
     }
   }
+  return out;
+}
+
+/** Park opens with a frozen pane on column W; reset to the date/meter block after saves. */
+export function patchPowerSolarParkSheetView(worksheetXml: string): string {
+  if (!worksheetXml.includes("<sheetViews>")) return worksheetXml;
+  let out = worksheetXml.replace(
+    /topLeftCell="[^"]+"/g,
+    'topLeftCell="B2"',
+  );
+  out = out.replace(
+    /<selection[^/]*pane="topRight"[^/]*\/>/g,
+    '<selection pane="bottomRight" activeCell="A2" sqref="A2"/>',
+  );
+  out = out.replace(
+    /activePane="bottomRight"/,
+    'activePane="bottomLeft"',
+  );
   return out;
 }

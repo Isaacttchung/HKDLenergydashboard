@@ -1,3 +1,19 @@
+/** 1-based column index: `A` → 1, `Z` → 26, `AA` → 27. */
+export function excelColumnIndex(col: string): number {
+  let index = 0;
+  for (const ch of col.toUpperCase()) {
+    index = index * 26 + (ch.charCodeAt(0) - 64);
+  }
+  return index;
+}
+
+/** Sort Excel column letters in sheet column order (not ASCII: `AA` after `Z`). */
+export function sortExcelColumns(cols: Iterable<string>): string[] {
+  return [...cols].sort(
+    (a, b) => excelColumnIndex(a) - excelColumnIndex(b),
+  );
+}
+
 /** `B` → `A`, `A` → null, `CCO` → `CCN`. */
 export function previousExcelColumn(col: string): string | null {
   let index = 0;
