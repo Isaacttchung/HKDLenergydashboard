@@ -22,13 +22,24 @@ function excelColumnIndex(col: string): number {
   return index;
 }
 
-function filterDatabaseEnd(rangeBody: string): {
+function parseFilterDatabaseCellRef(rangeBody: string): {
+  sheetPrefix: string;
+  startCol: string;
+  startRow: number;
   endCol: string;
   endRow: number;
 } | null {
-  const m = rangeBody.match(/:?\$([A-Z]+)\$(\d+)\s*$/);
+  const m = rangeBody.match(
+    /^([^!]+)!\$([A-Z]+)\$(\d+):\$([A-Z]+)\$(\d+)\s*$/,
+  );
   if (!m) return null;
-  return { endCol: m[1]!, endRow: Number(m[2]) };
+  return {
+    sheetPrefix: m[1]!,
+    startCol: m[2]!,
+    startRow: Number(m[3]),
+    endCol: m[4]!,
+    endRow: Number(m[5]),
+  };
 }
 
 /**
@@ -54,16 +65,24 @@ export function patchFilterDatabaseDefinedName(
 
   const filterAttrs = filterMatch[1]!;
   const currentBody = filterMatch[2]!;
-  const filterEnd = filterDatabaseEnd(currentBody);
+  const current = parseFilterDatabaseCellRef(currentBody);
+  if (!current) return workbookXml;
+
+  const endCol =
+    excelColumnIndex(current.endCol) >= excelColumnIndex(bounds.endCol)
+      ? current.endCol
+      : bounds.endCol;
+  const endRow = Math.max(current.endRow, bounds.endRow);
   if (
-    filterEnd !== null &&
-    excelColumnIndex(filterEnd.endCol) >= excelColumnIndex(bounds.endCol) &&
-    filterEnd.endRow >= bounds.endRow
+    endCol === current.endCol &&
+    endRow === current.endRow
   ) {
     return workbookXml;
   }
 
-  const newRange = `${sheetName}!$${bounds.startCol}$${bounds.startRow}:$${bounds.endCol}$${bounds.endRow}`;
+  const quotedSheet =
+    current.sheetPrefix.startsWith("'") ? current.sheetPrefix : sheetName;
+  const newRange = `${quotedSheet}!$${current.startCol}$${current.startRow}:$${endCol}$${endRow}`;
   return workbookXml.replace(
     filterRe,
     () =>

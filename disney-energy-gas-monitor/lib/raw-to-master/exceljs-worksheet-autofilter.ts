@@ -1,6 +1,4 @@
-import {
-  parseWorksheetDimension,
-} from "@/lib/raw-to-master/excel-column";
+import { parseWorksheetDimension } from "@/lib/raw-to-master/excel-column";
 
 function excelColumnIndex(col: string): number {
   let index = 0;
@@ -10,10 +8,17 @@ function excelColumnIndex(col: string): number {
   return index;
 }
 
-function parseAutoFilterEnd(ref: string): { endCol: string; endRow: number } | null {
-  const m = ref.match(/:?\$?([A-Z]+)\$?(\d+)\s*$/);
-  if (!m) return null;
-  return { endCol: m[1]!, endRow: Number(m[2]) };
+function parseAutoFilterRange(ref: string): ReturnType<typeof parseWorksheetDimension> {
+  return parseWorksheetDimension(ref.replace(/\$/g, ""));
+}
+
+function formatAutoFilterRef(
+  startCol: string,
+  startRow: number,
+  endCol: string,
+  endRow: number,
+): string {
+  return `${startCol}${startRow}:${endCol}${endRow}`;
 }
 
 /** Grow worksheet autoFilter when row/column span exceeds the written dimension. */
@@ -29,15 +34,24 @@ export function patchWorksheetAutoFilter(
   );
   if (!filterMatch) return worksheetXml;
 
-  const currentEnd = parseAutoFilterEnd(filterMatch[1]!);
-  if (!currentEnd) return worksheetXml;
+  const current = parseAutoFilterRange(filterMatch[1]!);
+  if (!current) return worksheetXml;
 
+  const endCol =
+    excelColumnIndex(current.endCol) >= excelColumnIndex(bounds.endCol)
+      ? current.endCol
+      : bounds.endCol;
+  const endRow = Math.max(current.endRow, bounds.endRow);
   const needsGrow =
-    excelColumnIndex(currentEnd.endCol) < excelColumnIndex(bounds.endCol) ||
-    currentEnd.endRow < bounds.endRow;
+    endCol !== current.endCol || endRow !== current.endRow;
   if (!needsGrow) return worksheetXml;
 
-  const newRef = `$${bounds.startCol}$${bounds.startRow}:$${bounds.endCol}$${bounds.endRow}`;
+  const newRef = formatAutoFilterRef(
+    current.startCol,
+    current.startRow,
+    endCol,
+    endRow,
+  );
   return worksheetXml.replace(
     /<autoFilter ref="[^"]+"([^>]*)\/>/,
     (_full, tail: string) => `<autoFilter ref="${newRef}"${tail}/>`,

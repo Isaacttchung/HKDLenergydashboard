@@ -31,6 +31,17 @@ test("patchFilterDatabaseDefinedName extends row span when columns already match
   </sheets><definedNames>
     <definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">CCP!$A$1:$J$2367</definedName>
   </definedNames></workbook>`;
-  const out = patchFilterDatabaseDefinedName(wb, "CCP", "A1:I3057");
-  assert.ok(out.includes("CCP!$A$1:$I$3057"));
+  const out = patchFilterDatabaseDefinedName(wb, "CCP", "A1:K3057");
+  assert.ok(out.includes("CCP!$A$1:$K$3057"));
+});
+
+test("patchFilterDatabaseDefinedName preserves filter header row", () => {
+  const wb = `<?xml version="1.0"?><workbook><sheets>
+    <sheet name="Hotel" sheetId="1" r:id="rId1"/>
+  </sheets><definedNames>
+    <definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">Hotel!$A$2:$S$2145</definedName>
+  </definedNames></workbook>`;
+  const out = patchFilterDatabaseDefinedName(wb, "Hotel", "A1:S3058");
+  assert.ok(out.includes("Hotel!$A$2:$S$3058"));
+  assert.ok(!out.includes("Hotel!$A$1:$S$3058"));
 });
