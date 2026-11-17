@@ -8,12 +8,13 @@ import {
 } from "@/lib/raw-to-master/exceljs-shared-strings";
 import { patchFilterDatabaseDefinedName } from "@/lib/raw-to-master/exceljs-workbook-defined-names";
 import {
-  ensureWorksheetAutoFilter,
   patchWorksheetAutoFilter,
+  removeWorksheetAutoFilter,
 } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
 import {
   mergeWorksheetPreservingCellStyles,
   patchPowerSolarParkSheetView,
+  patchWebSsDataSheetView,
 } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
 
 /** On-disk master bytes used as the merge baseline for the current edit session. */
@@ -128,11 +129,11 @@ export async function mergeWorkbookFromPristine(
     let merged = mergeWorksheetPreservingCellStyles(oXml, wXml, {
       preserveColumnValues: preserveLeading,
     });
-    if (dimensionRef) {
-      merged =
-        sheetName === "WebSS_Data"
-          ? ensureWorksheetAutoFilter(merged, dimensionRef)
-          : patchWorksheetAutoFilter(merged, dimensionRef);
+    if (sheetName === "WebSS_Data") {
+      merged = removeWorksheetAutoFilter(merged);
+      merged = patchWebSsDataSheetView(merged);
+    } else if (dimensionRef) {
+      merged = patchWorksheetAutoFilter(merged, dimensionRef);
     }
     if (sheetName === "Park") {
       merged = patchPowerSolarParkSheetView(merged);

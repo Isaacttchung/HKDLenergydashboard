@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   mergeWorksheetPreservingCellStyles,
   patchPowerSolarParkSheetView,
+  patchWebSsDataSheetView,
 } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
 
 test("mergeWorksheetPreservingCellStyles keeps pristine s= on updated values", () => {
@@ -50,6 +51,14 @@ test("mergeWorksheetPreservingCellStyles orders columns before AA", () => {
   const idxB = out.indexOf('r="B2"');
   const idxAb = out.indexOf('r="AB2"');
   assert.ok(idxB >= 0 && idxAb >= 0 && idxB < idxAb);
+});
+
+test("patchWebSsDataSheetView resets frozen pane to meter columns", () => {
+  const xml = `<?xml version="1.0"?><worksheet><sheetViews><sheetView><pane topLeftCell="CCG2"/><selection pane="topRight" activeCell="C1" sqref="C1"/></sheetView></sheetViews></worksheet>`;
+  const out = patchWebSsDataSheetView(xml);
+  assert.match(out, /topLeftCell="C3"/);
+  assert.match(out, /activeCell="A2"/);
+  assert.doesNotMatch(out, /pane="topRight"/);
 });
 
 test("patchPowerSolarParkSheetView resets frozen pane anchor", () => {

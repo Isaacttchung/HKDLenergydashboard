@@ -53,10 +53,16 @@ export function patchWorksheetAutoFilter(
   );
 }
 
+/** WebSS pristine master has no worksheet filter; ExcelJS or prior patches must not leave one on. */
+export function removeWorksheetAutoFilter(worksheetXml: string): string {
+  return worksheetXml
+    .replace(/\s*<autoFilter[^>]*\/>\s*/g, "\n")
+    .replace(/\s*<autoFilter[^>]*>[\s\S]*?<\/autoFilter>\s*/g, "\n");
+}
+
 /**
- * WebSS_Data relies on `_FilterDatabase` but has no `<autoFilter>` in the
- * pristine master; after the filter range grows, Excel hides column B unless
- * the worksheet filter matches.
+ * @deprecated Adding `<autoFilter>` on WebSS_Data blanked the sheet in Excel; use
+ * `_FilterDatabase` extension only (see merge for WebSS_Data).
  */
 export function ensureWorksheetAutoFilter(
   worksheetXml: string,

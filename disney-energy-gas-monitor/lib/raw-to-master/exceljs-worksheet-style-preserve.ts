@@ -289,6 +289,26 @@ export function mergeWorksheetPreservingCellStyles(
   return out;
 }
 
+/** WebSS_Data opens scrolled to the newest date column; show Meter/Location first. */
+export function patchWebSsDataSheetView(worksheetXml: string): string {
+  if (!worksheetXml.includes("<sheetViews>")) return worksheetXml;
+  let out = worksheetXml.replace(
+    /topLeftCell="[^"]+"/g,
+    'topLeftCell="C3"',
+  );
+  out = out.replace(
+    /<selection[^/]*pane="topRight"[^/]*\/>/g,
+    '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>',
+  );
+  if (!out.includes('activeCell="A2"')) {
+    out = out.replace(
+      /(<sheetView[^>]*>)/,
+      '$1<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>',
+    );
+  }
+  return out;
+}
+
 /** Park opens with a frozen pane on column W; reset to the date/meter block after saves. */
 export function patchPowerSolarParkSheetView(worksheetXml: string): string {
   if (!worksheetXml.includes("<sheetViews>")) return worksheetXml;

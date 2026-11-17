@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  ensureWorksheetAutoFilter,
   patchWorksheetAutoFilter,
+  removeWorksheetAutoFilter,
 } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
 
 test("patchWorksheetAutoFilter grows autoFilter to sheet dimension", () => {
@@ -17,8 +17,8 @@ test("patchWorksheetAutoFilter keeps original header row when growing", () => {
   assert.match(out, /autoFilter ref="A2:S3058"/);
 });
 
-test("ensureWorksheetAutoFilter adds filter when missing", () => {
-  const xml = `<?xml version="1.0"?><worksheet><sheetData></sheetData></worksheet>`;
-  const out = ensureWorksheetAutoFilter(xml, "A1:CCO301");
-  assert.match(out, /autoFilter ref="A1:CCO301"/);
+test("removeWorksheetAutoFilter strips worksheet filter tag", () => {
+  const xml = `<?xml version="1.0"?><worksheet><autoFilter ref="A1:CCO301"/><sheetData></sheetData></worksheet>`;
+  const out = removeWorksheetAutoFilter(xml);
+  assert.doesNotMatch(out, /autoFilter/);
 });
