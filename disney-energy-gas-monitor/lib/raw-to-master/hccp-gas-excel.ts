@@ -43,15 +43,6 @@ function isoFromCellValue(value: ExcelJS.CellValue): string | null {
   return null;
 }
 
-function copyRowPresentation(source: ExcelJS.Row, target: ExcelJS.Row): void {
-  if (source.height) target.height = source.height;
-  source.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-    const targetCell = target.getCell(colNumber);
-    targetCell.style = JSON.parse(JSON.stringify(cell.style ?? {}));
-    if (cell.numFmt) targetCell.numFmt = cell.numFmt;
-  });
-}
-
 function setThirtyDaysFormula(row: ExcelJS.Row, excelRow: number): void {
   const rowIso = isoFromCellValue(row.getCell(GAS_COL.date).value);
   const result = rowIso ? gasThirtyDaysFormulaResult(rowIso) : false;
@@ -100,7 +91,7 @@ export function syncGasMeterTableRange(
   queueTableRangePatch(masterWorkbookPath, "table1.xml", `A1:K${lastDataRow}`);
 }
 
-function findLastDatedRow(sheet: ExcelJS.Worksheet): number | null {
+export function findLastGasMeterDatedRow(sheet: ExcelJS.Worksheet): number | null {
   let last: number | null = null;
   const rowCount = sheet.rowCount;
   for (let row = DATA_SCAN_START_ROW; row <= rowCount; row += 1) {
@@ -119,7 +110,7 @@ export function ensureGasMeterRow(
   const existing = findGasMeterRowByDate(sheet, isoDate);
   if (existing !== null) return existing;
 
-  const templateRowNumber = findLastDatedRow(sheet);
+  const templateRowNumber = findLastGasMeterDatedRow(sheet);
   if (templateRowNumber === null) {
     throw new Error("Gas Meter Reading has no template data rows");
   }
@@ -128,7 +119,7 @@ export function ensureGasMeterRow(
   sheet.spliceRows(insertAt, 0, []);
   const templateRow = sheet.getRow(templateRowNumber);
   const newRow = sheet.getRow(insertAt);
-  copyRowPresentation(templateRow, newRow);
+  if (templateRow.height) newRow.height = templateRow.height;
 
   setExcelDateCellValue(
     newRow.getCell(GAS_COL.date),
@@ -140,7 +131,8 @@ export function ensureGasMeterRow(
   setOverallOccupancyFormula(newRow, insertAt);
   setGasUnitsFormula(newRow, insertAt);
 
-  syncGasMeterTableRange(masterWorkbookPath, insertAt);
+  const lastRow = findLastGasMeterDatedRow(sheet) ?? insertAt;
+  syncGasMeterTableRange(masterWorkbookPath, lastRow);
 
   return insertAt;
 }
@@ -196,7 +188,11 @@ export async function saveGasMeterWorkbook(
   masterWorkbookPath: string,
 ): Promise<void> {
   const sheet = getGasMeterSheet(workbook);
-  refreshGasMeterFormulaCaches(sheet);
+  const lastRow = findLastGasMeterDatedRow(sheet);
+  if (lastRow !== null) {
+    refreshGasMeterFormulaCaches(sheet, 2, lastRow);
+    syncGasMeterTableRange(masterWorkbookPath, lastRow);
+  }
   workbook.calcProperties.fullCalcOnLoad = true;
   await saveExcelWorkbook(workbook, masterWorkbookPath, [GAS_METER_SHEET]);
 }

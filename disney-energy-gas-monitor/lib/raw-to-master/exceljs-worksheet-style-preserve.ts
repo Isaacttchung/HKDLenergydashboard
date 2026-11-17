@@ -4,7 +4,10 @@
  * Copy values/formulas from the written row but keep pristine cell `s` styles.
  */
 
-import { previousExcelColumn } from "@/lib/raw-to-master/excel-column";
+import {
+  maxColumnIndexInColsXml,
+  previousExcelColumn,
+} from "@/lib/raw-to-master/excel-column";
 
 const ROW_RE = /<row r="(\d+)"([^>]*)>([\s\S]*?)<\/row>/g;
 const CELL_RE =
@@ -82,18 +85,50 @@ function styleTemplateAttrs(
   return prevColCell?.attrs ?? leftStyle;
 }
 
-function mergeColsFromWritten(
+/** Append width-only `<col>` definitions for new columns; keep pristine column styles. */
+function appendNewColumnWidthsFromWritten(
   pristineWorksheetXml: string,
   writtenWorksheetXml: string,
 ): string {
-  const writtenCols = writtenWorksheetXml.match(/<cols>[\s\S]*?<\/cols>/)?.[0];
-  if (!writtenCols) return pristineWorksheetXml;
-  if (pristineWorksheetXml.includes("<cols>")) {
-    return pristineWorksheetXml.replace(/<cols>[\s\S]*?<\/cols>/, writtenCols);
+  const writtenBlock = writtenWorksheetXml.match(/<cols>([\s\S]*?)<\/cols>/)?.[1];
+  const pristineBlock = pristineWorksheetXml.match(
+    /<cols>([\s\S]*?)<\/cols>/,
+  )?.[1];
+  if (!writtenBlock) return pristineWorksheetXml;
+
+  const pristineMax = maxColumnIndexInColsXml(pristineBlock);
+  const additions: string[] = [];
+  for (const m of writtenBlock.matchAll(/<col ([^/]+)\/>/g)) {
+    const attrs = m[1]!;
+    const min = colAttrInt(attrs, "min");
+    if (min === null || min <= pristineMax) continue;
+    const stripped = attrs
+      .replace(/\s*style="\d+"/, "")
+      .replace(/\s*bestFit="1"/, "");
+    additions.push(`<col ${stripped}/>`);
+  }
+  if (additions.length === 0) return pristineWorksheetXml;
+
+  if (pristineBlock !== undefined) {
+    return pristineWorksheetXml.replace(
+      /<\/cols>/,
+      `${additions.join("")}</cols>`,
+    );
   }
   return pristineWorksheetXml.replace(
     /(<sheetFormatPr[^/]*\/>)/,
-    `$1${writtenCols}`,
+    `$1<cols>${additions.join("")}</cols>`,
+  );
+}
+
+function colAttrInt(attrs: string, key: string): number | null {
+  const m = attrs.match(new RegExp(`${key}="(\\d+)"`));
+  return m ? Number(m[1]) : null;
+}
+
+function rowHasCellPayload(inner: string): boolean {
+  return (
+    /<v>/.test(inner) || /<is>/.test(inner) || /<f\b/.test(inner)
   );
 }
 
@@ -211,6 +246,9 @@ export function mergeWorksheetPreservingCellStyles(
       continue;
     }
     if (!w) continue;
+    if (!p && !rowHasCellPayload(w.inner)) {
+      continue;
+    }
     const prevTemplate =
       pRows.get(String(Number(rowNum) - 1))?.inner ?? templateInner;
     mergedRows.push(
@@ -231,7 +269,7 @@ export function mergeWorksheetPreservingCellStyles(
     /<sheetData[\s\S]*?<\/sheetData>/,
     newSheetData,
   );
-  out = mergeColsFromWritten(out, writtenWorksheetXml);
+  out = appendNewColumnWidthsFromWritten(out, writtenWorksheetXml);
   if (writtenDim) {
     if (out.includes("<dimension ")) {
       out = out.replace(

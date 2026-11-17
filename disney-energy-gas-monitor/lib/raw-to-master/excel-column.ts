@@ -15,6 +15,23 @@ export function previousExcelColumn(col: string): string | null {
   return result;
 }
 
+function colAttrInt(attrs: string, key: string): number | null {
+  const m = attrs.match(new RegExp(`${key}="(\\d+)"`));
+  return m ? Number(m[1]) : null;
+}
+
+/** Highest 1-based column index declared in a worksheet `<cols>` block. */
+export function maxColumnIndexInColsXml(colsXml: string | undefined): number {
+  if (!colsXml) return 0;
+  let max = 0;
+  for (const m of colsXml.matchAll(/<col ([^/]+)\/>/g)) {
+    const attrs = m[1]!;
+    const hi = colAttrInt(attrs, "max") ?? colAttrInt(attrs, "min");
+    if (hi !== null) max = Math.max(max, hi);
+  }
+  return max;
+}
+
 /** `A1:CCO301` or `A1` → bounds; missing end uses start. */
 export function parseWorksheetDimension(ref: string): {
   startCol: string;

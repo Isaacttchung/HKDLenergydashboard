@@ -54,8 +54,9 @@ function isoFromDateCell(value: ExcelJS.CellValue): string | null {
 export function refreshGasMeterFormulaCaches(
   sheet: ExcelJS.Worksheet,
   firstDataRow = 2,
+  lastDataRow?: number,
 ): void {
-  const last = sheet.rowCount;
+  const last = lastDataRow ?? sheet.rowCount;
   for (let rowNum = firstDataRow; rowNum <= last; rowNum += 1) {
     const row = sheet.getRow(rowNum);
     const rowIso = isoFromDateCell(row.getCell(COL.date).value);
