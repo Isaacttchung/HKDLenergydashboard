@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   dropWorksheetCellsFromColumn,
+  ensureTrailingDateColumnWidth,
   mergeWorksheetPreservingCellStyles,
+  patchPowerSolarParkColumnChrome,
   patchPowerSolarParkSheetView,
   patchWebSsDataSheetView,
 } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
@@ -74,6 +76,42 @@ test("patchWebSsDataSheetView resets frozen pane to meter columns", () => {
   assert.match(out, /topLeftCell="C3"/);
   assert.match(out, /activeCell="A2"/);
   assert.doesNotMatch(out, /pane="topRight"/);
+});
+
+test("mergeWorksheetPreservingCellStyles ignores ExcelJS border styles on gas meter cols", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="J1" s="22"><v>100</v></c></row>
+  </sheetData></worksheet>`;
+  const written = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="J1" s="22"><v>100</v></c></row>
+    <row r="2"><c r="I2" s="47"/><c r="J2" s="90"><v>0</v></c></row>
+  </sheetData></worksheet>`;
+  const out = mergeWorksheetPreservingCellStyles(pristine, written, {
+    forceTemplateStyleColumns: new Set(["I", "J", "K", "L"]),
+  });
+  assert.match(out, /r="J2" s="22"/);
+  assert.doesNotMatch(out, /s="90"/);
+});
+
+test("ensureTrailingDateColumnWidth adds width for a new date column", () => {
+  const xml = `<?xml version="1.0"?><worksheet>
+    <dimension ref="A1:CCO2"/>
+    <cols><col min="2120" max="2120" width="11.85546875" customWidth="1"/></cols>
+    <sheetData></sheetData></worksheet>`;
+  const out = ensureTrailingDateColumnWidth(xml);
+  assert.match(out, /min="2121" max="2121" width="11\.85546875"/);
+});
+
+test("patchPowerSolarParkColumnChrome trims styled cols beyond AB", () => {
+  const xml = `<?xml version="1.0"?><worksheet><cols>
+    <col min="27" max="27" width="11" style="2"/>
+    <col min="29" max="29" width="12" style="2"/>
+    <col min="37" max="16384" width="9" style="2"/>
+  </cols></worksheet>`;
+  const out = patchPowerSolarParkColumnChrome(xml);
+  assert.match(out, /min="27"/);
+  assert.doesNotMatch(out, /style="2"/);
+  assert.doesNotMatch(out, /min="37"/);
 });
 
 test("patchPowerSolarParkSheetView resets frozen pane anchor", () => {

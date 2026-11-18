@@ -7,6 +7,7 @@
 import {
   excelColumnIndex,
   maxColumnIndexInColsXml,
+  parseWorksheetDimension,
   previousExcelColumn,
   sortExcelColumns,
 } from "@/lib/raw-to-master/excel-column";
@@ -188,14 +189,38 @@ function mergeCellAttrs(
   return `${style} ${base}`;
 }
 
+/** Meter tail rows: ExcelJS `s=` often adds thick borders; never keep written styles. */
+function mergeCellAttrsFromTemplateOnly(
+  writtenAttrs: string,
+  pristineAttrs: string | undefined,
+  templateAttrs: string | undefined,
+): string {
+  const style =
+    styleAttrFrom(pristineAttrs ?? "") ??
+    styleAttrFrom(templateAttrs ?? "") ??
+    "";
+  const base = stripStyleAttr(writtenAttrs).trim();
+  if (!style) return base ? ` ${base}` : "";
+  if (!base) return style;
+  return `${style} ${base}`;
+}
+
+export type MergeWorksheetStyleOptions = {
+  preserveColumnValues?: ReadonlySet<string>;
+  /** Always use pristine / previous-row style, ignoring ExcelJS `s=`. */
+  forceTemplateStyleColumns?: ReadonlySet<string>;
+};
+
 function mergeRowXml(
   rowNum: string,
   rowAttrs: string,
   writtenInner: string,
   pristineInner: string | undefined,
   templateInner: string | undefined,
-  preserveColumnValues?: ReadonlySet<string>,
+  options?: MergeWorksheetStyleOptions,
 ): string {
+  const preserveColumnValues = options?.preserveColumnValues;
+  const forceTemplateStyleColumns = options?.forceTemplateStyleColumns;
   const wCells = parseCells(writtenInner);
   const pCells = pristineInner ? parseCells(pristineInner) : new Map();
   const tCells = templateInner ? parseCells(templateInner) : new Map();
@@ -222,7 +247,13 @@ function mergeRowXml(
       continue;
     }
     const templateStyle = styleTemplateAttrs(col, w, pCells, wCells, tCells);
-    const attrs = mergeCellAttrs(w.attrs, pristineCell?.attrs, templateStyle);
+    const attrs = forceTemplateStyleColumns?.has(col)
+      ? mergeCellAttrsFromTemplateOnly(
+          w.attrs,
+          pristineCell?.attrs,
+          templateStyle,
+        )
+      : mergeCellAttrs(w.attrs, pristineCell?.attrs, templateStyle);
     const inner = mergeFormulaInnerWithPristine(
       w.inner,
       pristineCell?.inner,
@@ -256,10 +287,60 @@ function maxRowNum(rows: Map<string, { attrs: string; inner: string }>): number 
  * Replace sheetData with written values while preserving pristine cell styles
  * (and sheet chrome: views, col widths, etc.).
  */
+function columnIndexCovered(colsInner: string, index: number): boolean {
+  for (const m of colsInner.matchAll(/<col ([^/]+)\/>/g)) {
+    const attrs = m[1]!;
+    const min = colAttrInt(attrs, "min");
+    const max = colAttrInt(attrs, "max") ?? min;
+    if (min === null) continue;
+    if (min <= index && (max ?? min) >= index) return true;
+  }
+  return false;
+}
+
+function columnWidthForIndex(
+  colsInner: string,
+  index: number,
+): number | null {
+  for (const m of colsInner.matchAll(/<col ([^/]+)\/>/g)) {
+    const attrs = m[1]!;
+    const min = colAttrInt(attrs, "min");
+    const max = colAttrInt(attrs, "max") ?? min;
+    if (min === null) continue;
+    if (min <= index && (max ?? min) >= index) {
+      const w = attrs.match(/width="([^"]+)"/);
+      if (w) return Number(w[1]);
+    }
+  }
+  return null;
+}
+
+/** New WebSS date headers need an explicit width or Excel shows `########`. */
+export function ensureTrailingDateColumnWidth(
+  worksheetXml: string,
+  fallbackWidth = 11.85546875,
+): string {
+  const dimRef = worksheetXml.match(
+    /<dimension ref="([^"]+)"[^/]*\/>/,
+  )?.[1];
+  if (!dimRef) return worksheetXml;
+  const bounds = parseWorksheetDimension(dimRef);
+  if (!bounds) return worksheetXml;
+  const endIdx = excelColumnIndex(bounds.endCol);
+  const colsMatch = worksheetXml.match(/<cols>([\s\S]*?)<\/cols>/);
+  if (!colsMatch) return worksheetXml;
+  const inner = colsMatch[1]!;
+  if (columnIndexCovered(inner, endIdx)) return worksheetXml;
+  const prevWidth =
+    columnWidthForIndex(inner, endIdx - 1) ?? fallbackWidth;
+  const entry = `<col min="${endIdx}" max="${endIdx}" width="${prevWidth}" customWidth="1"/>`;
+  return worksheetXml.replace(/<\/cols>/, `${entry}</cols>`);
+}
+
 export function mergeWorksheetPreservingCellStyles(
   pristineWorksheetXml: string,
   writtenWorksheetXml: string,
-  options?: { preserveColumnValues?: ReadonlySet<string> },
+  options?: MergeWorksheetStyleOptions,
 ): string {
   const writtenData = writtenWorksheetXml.match(
     /<sheetData[\s\S]*?<\/sheetData>/,
@@ -304,7 +385,7 @@ export function mergeWorksheetPreservingCellStyles(
         w.inner,
         p?.inner,
         prevTemplate,
-        options?.preserveColumnValues,
+        options,
       ),
     );
   }
@@ -350,6 +431,32 @@ export function patchWebSsDataSheetView(worksheetXml: string): string {
     );
   }
   return out;
+}
+
+/**
+ * Park AA/AB are labels; AC+ are unused. ExcelJS leaves wide styled `<col>` stubs
+ * (green fill / grid borders) — trim to AB and drop column style on AA/AB.
+ */
+export function patchPowerSolarParkColumnChrome(worksheetXml: string): string {
+  const acIdx = excelColumnIndex("AC");
+  const aaIdx = excelColumnIndex("AA");
+  if (!worksheetXml.includes("<cols>")) return worksheetXml;
+  return worksheetXml.replace(
+    /<cols>([\s\S]*?)<\/cols>/,
+    (_full, inner: string) => {
+      const kept: string[] = [];
+      for (const m of inner.matchAll(/<col ([^/]+)\/>/g)) {
+        let attrs = m[1]!;
+        const min = colAttrInt(attrs, "min");
+        if (min === null || min >= acIdx) continue;
+        if (min >= aaIdx) {
+          attrs = attrs.replace(/\s*style="\d+"/g, "");
+        }
+        kept.push(`<col ${attrs}/>`);
+      }
+      return `<cols>${kept.join("")}</cols>`;
+    },
+  );
 }
 
 /** Park opens with a frozen pane on column W; reset to the date/meter block after saves. */

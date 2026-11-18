@@ -13,9 +13,12 @@ import {
   patchWorksheetAutoFilterGrowRowsOnly,
   removeWorksheetAutoFilter,
 } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
+import { GAS_METER_SHEET_NAME } from "@/lib/raw-to-master/hccp-gas";
 import {
   dropWorksheetCellsFromColumn,
+  ensureTrailingDateColumnWidth,
   mergeWorksheetPreservingCellStyles,
+  patchPowerSolarParkColumnChrome,
   patchPowerSolarParkSheetView,
   patchWebSsDataSheetView,
 } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
@@ -26,6 +29,8 @@ const POWER_SOLAR_DATA_SHEETS = new Set([
   "Hotel",
   "Park",
 ]);
+
+const GAS_METER_TEMPLATE_STYLE_COLUMNS = new Set(["I", "J", "K", "L"]);
 
 /** On-disk master bytes used as the merge baseline for the current edit session. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
@@ -136,16 +141,23 @@ export async function mergeWorkbookFromPristine(
     )?.[1];
     const preserveLeading =
       sheetName === "WebSS_Data" ? new Set(["A", "B"]) : undefined;
+    const forceTemplateStyleColumns =
+      sheetName === GAS_METER_SHEET_NAME
+        ? GAS_METER_TEMPLATE_STYLE_COLUMNS
+        : undefined;
     let merged = mergeWorksheetPreservingCellStyles(oXml, wXml, {
       preserveColumnValues: preserveLeading,
+      forceTemplateStyleColumns,
     });
     if (sheetName === "WebSS_Data") {
       merged = removeWorksheetAutoFilter(merged);
       merged = patchWebSsDataSheetView(merged);
+      merged = ensureTrailingDateColumnWidth(merged);
     } else if (POWER_SOLAR_DATA_SHEETS.has(sheetName) && dimensionRef) {
       merged = patchWorksheetAutoFilterGrowRowsOnly(oXml, merged, dimensionRef);
       if (sheetName === "Park") {
         merged = dropWorksheetCellsFromColumn(merged, "AC");
+        merged = patchPowerSolarParkColumnChrome(merged);
         merged = patchPowerSolarParkSheetView(merged);
       }
     } else if (dimensionRef) {
