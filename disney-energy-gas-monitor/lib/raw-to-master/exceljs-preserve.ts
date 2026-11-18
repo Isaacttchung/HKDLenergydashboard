@@ -18,10 +18,13 @@ export { markWorkbookSheetEdited };
 
 export async function loadExcelWorkbook(
   masterWorkbookPath: string,
+  options?: { rememberPristine?: boolean },
 ): Promise<ExcelJS.Workbook> {
   const resolved = path.resolve(masterWorkbookPath);
   const buffer = await readFile(resolved);
-  rememberPristineWorkbook(resolved, buffer);
+  if (options?.rememberPristine !== false) {
+    rememberPristineWorkbook(resolved, buffer);
+  }
   await captureWorkbookTableXml(resolved, buffer);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);

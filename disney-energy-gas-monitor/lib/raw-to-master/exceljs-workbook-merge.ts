@@ -18,6 +18,7 @@ import {
   dropWorksheetCellsFromColumn,
   ensureTrailingDateColumnWidth,
   mergeWorksheetPreservingCellStyles,
+  patchGasMeterReadingMeterColumnStyles,
   patchPowerSolarParkColumnChrome,
   patchPowerSolarParkSheetView,
   patchWebSsDataSheetView,
@@ -149,7 +150,9 @@ export async function mergeWorkbookFromPristine(
       preserveColumnValues: preserveLeading,
       forceTemplateStyleColumns,
     });
-    if (sheetName === "WebSS_Data") {
+    if (sheetName === GAS_METER_SHEET_NAME) {
+      merged = patchGasMeterReadingMeterColumnStyles(merged);
+    } else if (sheetName === "WebSS_Data") {
       merged = removeWorksheetAutoFilter(merged);
       merged = patchWebSsDataSheetView(merged);
       merged = ensureTrailingDateColumnWidth(merged);

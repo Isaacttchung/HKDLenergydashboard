@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import {
+  copyCellPresentation,
   loadExcelWorkbook,
   saveExcelWorkbook,
 } from "@/lib/raw-to-master/exceljs-preserve";
@@ -131,6 +132,18 @@ export function ensureGasMeterRow(
   setOverallOccupancyFormula(newRow, insertAt);
   setGasUnitsFormula(newRow, insertAt);
 
+  for (const col of [
+    GAS_COL.meter1,
+    GAS_COL.meter2,
+    GAS_COL.gasUnits,
+    GAS_COL.atten,
+  ]) {
+    copyCellPresentation(
+      templateRow.getCell(col),
+      newRow.getCell(col),
+    );
+  }
+
   const lastRow = findLastGasMeterDatedRow(sheet) ?? insertAt;
   syncGasMeterTableRange(masterWorkbookPath, lastRow);
 
@@ -181,7 +194,10 @@ export function writeGasManualFieldsOnRow(
 
 export const GAS_METER_SHEET = "Gas Meter Reading";
 
-export const loadGasMeterWorkbook = loadExcelWorkbook;
+export const loadGasMeterWorkbook = (
+  masterWorkbookPath: string,
+  options?: { rememberPristine?: boolean },
+) => loadExcelWorkbook(masterWorkbookPath, options);
 
 export async function saveGasMeterWorkbook(
   workbook: ExcelJS.Workbook,

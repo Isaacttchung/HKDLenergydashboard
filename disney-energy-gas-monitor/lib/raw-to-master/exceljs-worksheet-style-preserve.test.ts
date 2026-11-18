@@ -4,6 +4,7 @@ import {
   dropWorksheetCellsFromColumn,
   ensureTrailingDateColumnWidth,
   mergeWorksheetPreservingCellStyles,
+  patchGasMeterReadingMeterColumnStyles,
   patchPowerSolarParkColumnChrome,
   patchPowerSolarParkSheetView,
   patchWebSsDataSheetView,
@@ -76,6 +77,31 @@ test("patchWebSsDataSheetView resets frozen pane to meter columns", () => {
   assert.match(out, /topLeftCell="C3"/);
   assert.match(out, /activeCell="A2"/);
   assert.doesNotMatch(out, /pane="topRight"/);
+});
+
+test("mergeWorksheetPreservingCellStyles rejects contaminated pristine s=90 on gas meter cols", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="J1" s="22"><v>100</v></c></row>
+    <row r="2"><c r="J2" s="90"><v>0</v></c></row>
+  </sheetData></worksheet>`;
+  const written = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="1"><c r="J1" s="22"><v>100</v></c></row>
+    <row r="2"><c r="J2" s="90"><v>1</v></c></row>
+  </sheetData></worksheet>`;
+  const out = mergeWorksheetPreservingCellStyles(pristine, written, {
+    forceTemplateStyleColumns: new Set(["I", "J", "K", "L"]),
+  });
+  assert.match(out, /r="J2" s="22"/);
+  assert.doesNotMatch(out, /s="90"/);
+});
+
+test("patchGasMeterReadingMeterColumnStyles strips s=90 using row above", () => {
+  const xml = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="3057"><c r="J3057" s="22"><v>1</v></c></row>
+    <row r="3058"><c r="I3058" s="47"/><c r="J3058" s="90"><v>0</v></c></row>
+  </sheetData></worksheet>`;
+  const out = patchGasMeterReadingMeterColumnStyles(xml);
+  assert.match(out, /r="J3058" s="22"/);
 });
 
 test("mergeWorksheetPreservingCellStyles ignores ExcelJS border styles on gas meter cols", () => {

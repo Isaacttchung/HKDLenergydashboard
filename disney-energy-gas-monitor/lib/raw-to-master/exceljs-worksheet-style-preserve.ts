@@ -149,6 +149,73 @@ function mergeFormulaInnerWithPristine(
   );
 }
 
+const GAS_METER_READING_STYLE_COLUMNS = ["I", "J", "K", "L"] as const;
+
+function replaceCellStyleAttr(attrs: string, style: string): string {
+  const trimmed = stripStyleAttr(attrs).trim();
+  if (!trimmed) return style;
+  return `${style} ${trimmed}`;
+}
+
+/**
+ * Gas Meter Reading: fix tail rows even when a prior save already committed `s="90"`.
+ * Copies the style from the same column on the previous row for I–L.
+ */
+export function patchGasMeterReadingMeterColumnStyles(
+  worksheetXml: string,
+): string {
+  const dataMatch = worksheetXml.match(
+    /<sheetData([\s\S]*?)<\/sheetData>/,
+  );
+  if (!dataMatch) return worksheetXml;
+
+  const lastStyleByCol = new Map<string, string>();
+  const fixedRows: string[] = [];
+
+  let m: RegExpExecArray | null;
+  const rowRe = new RegExp(ROW_RE.source, "g");
+  while ((m = rowRe.exec(dataMatch[1]!)) !== null) {
+    const rowNum = m[1]!;
+    const rowAttrs = m[2] ?? "";
+    const inner = m[3]!;
+    const rowIndex = Number(rowNum);
+
+    const newCells: string[] = [];
+    let cellM: RegExpExecArray | null;
+    const cellRe = new RegExp(CELL_RE.source, "g");
+    while ((cellM = cellRe.exec(inner)) !== null) {
+      const col = cellM[1]!;
+      let attrs = cellM[3] ?? "";
+      const body = cellM[4] ?? "";
+
+      if (
+        GAS_METER_READING_STYLE_COLUMNS.includes(
+          col as (typeof GAS_METER_READING_STYLE_COLUMNS)[number],
+        )
+      ) {
+        const styleId = styleAttrFrom(attrs)?.match(/s="(\d+)"/)?.[1];
+        const prevStyle = lastStyleByCol.get(col);
+        if (
+          styleId &&
+          GAS_METER_BAD_CELL_STYLE_IDS.has(styleId) &&
+          prevStyle &&
+          rowIndex > 2
+        ) {
+          attrs = replaceCellStyleAttr(attrs, prevStyle);
+        }
+        const effective = styleAttrFrom(attrs);
+        if (effective) lastStyleByCol.set(col, effective);
+      }
+
+      newCells.push(buildCellXml(col, rowNum, attrs, body));
+    }
+    fixedRows.push(`<row r="${rowNum}"${rowAttrs}>${newCells.join("")}</row>`);
+  }
+
+  const newData = `<sheetData>${fixedRows.join("")}</sheetData>`;
+  return worksheetXml.replace(/<sheetData[\s\S]*?<\/sheetData>/, newData);
+}
+
 /** Drop cells from `firstUnusedCol` onward (e.g. Park AC+). */
 export function dropWorksheetCellsFromColumn(
   worksheetXml: string,
@@ -189,16 +256,32 @@ function mergeCellAttrs(
   return `${style} ${base}`;
 }
 
+/** ExcelJS often assigns thick borders to meter tail cells; never treat as canonical. */
+const GAS_METER_BAD_CELL_STYLE_IDS = new Set(["90"]);
+
+function gasMeterStyleAttr(
+  pristineAttrs: string | undefined,
+  templateAttrs: string | undefined,
+): string | null {
+  const pristineStyle = styleAttrFrom(pristineAttrs ?? "");
+  const pristineId = pristineStyle?.match(/s="(\d+)"/)?.[1];
+  const templateStyle = styleAttrFrom(templateAttrs ?? "");
+  if (
+    pristineStyle &&
+    (!pristineId || !GAS_METER_BAD_CELL_STYLE_IDS.has(pristineId))
+  ) {
+    return pristineStyle;
+  }
+  return templateStyle ?? pristineStyle;
+}
+
 /** Meter tail rows: ExcelJS `s=` often adds thick borders; never keep written styles. */
 function mergeCellAttrsFromTemplateOnly(
   writtenAttrs: string,
   pristineAttrs: string | undefined,
   templateAttrs: string | undefined,
 ): string {
-  const style =
-    styleAttrFrom(pristineAttrs ?? "") ??
-    styleAttrFrom(templateAttrs ?? "") ??
-    "";
+  const style = gasMeterStyleAttr(pristineAttrs, templateAttrs) ?? "";
   const base = stripStyleAttr(writtenAttrs).trim();
   if (!style) return base ? ` ${base}` : "";
   if (!base) return style;

@@ -235,7 +235,9 @@ export async function convertHccpGasMaster(
   }
   await saveGasMeterWorkbook(workbook, input.masterWorkbookPath);
 
-  const verify = await loadGasMeterWorkbook(input.masterWorkbookPath);
+  const verify = await loadGasMeterWorkbook(input.masterWorkbookPath, {
+    rememberPristine: false,
+  });
   const verifySheet = getGasMeterSheet(verify);
   let datedRows = 0;
   for (let row = 2; row <= Math.min(verifySheet.rowCount, 50); row += 1) {
