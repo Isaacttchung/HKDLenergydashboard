@@ -578,14 +578,25 @@ export function patchPowerSolarParkSheetView(worksheetXml: string): string {
     /topLeftCell="[^"]+"/g,
     'topLeftCell="B2"',
   );
-  out = out.replace(/\s*<selection[^/]*\/>\s*/g, "");
+  out = out.replace(/activePane="[^"]+"/g, 'activePane="bottomLeft"');
   out = out.replace(
-    /activePane="[^"]+"/,
-    'activePane="bottomLeft"',
+    /<selection[^/]*pane="topRight"[^/]*\/>/g,
+    '<selection pane="topRight" activeCell="A2" sqref="A2"/>',
   );
   out = out.replace(
-    /(<sheetView[^>]*>)/,
-    '$1<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>',
+    /<selection[^/]*pane="bottomLeft"[^/]*\/>/g,
+    '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>',
   );
+  out = out.replace(
+    /<selection[^/]*pane="bottomRight"[^/]*\/>/g,
+    '<selection pane="bottomRight" activeCell="A2" sqref="A2"/>',
+  );
+  if (out.includes("<pane ") && !out.includes('pane="bottomLeft"')) {
+    const inject =
+      '<selection pane="topRight" activeCell="A2" sqref="A2"/>' +
+      '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>' +
+      '<selection pane="bottomRight" activeCell="A2" sqref="A2"/>';
+    out = out.replace(/(<pane[^/]*\/>)/, `$1${inject}`);
+  }
   return out;
 }

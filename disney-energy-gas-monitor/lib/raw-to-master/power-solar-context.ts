@@ -200,7 +200,10 @@ export async function updatePowerSolarContextColumns(
       );
     }
     writeParkContextFormulasExcel(parkSheet, row, update.atten ?? atten);
-  } catch {
+  } catch (error) {
+    if (update.atten != null || update.outdoorAirTempC != null) {
+      throw error;
+    }
   }
 
   await saveExcelWorkbook(workbook, masterWorkbookPath, ["Hotel", "Park"]);

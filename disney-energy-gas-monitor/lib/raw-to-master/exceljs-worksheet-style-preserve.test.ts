@@ -155,9 +155,10 @@ test("mergeWorksheetPreservingCellStyles keeps pristine row s= for Park rows", (
 });
 
 test("patchPowerSolarParkSheetView resets frozen pane anchor", () => {
-  const xml = `<?xml version="1.0"?><worksheet><sheetViews><sheetView><pane topLeftCell="W3046"/><selection pane="topRight" activeCell="U58" sqref="U58"/></sheetView></sheetViews></worksheet>`;
+  const xml = `<?xml version="1.0"?><worksheet><sheetViews><sheetView zoomScale="90" workbookViewId="0"><pane xSplit="1" ySplit="1" topLeftCell="W3046" activePane="bottomRight" state="frozenSplit"/><selection pane="topRight" activeCell="U58" sqref="U58"/><selection pane="bottomLeft" activeCell="U58" sqref="U58"/><selection pane="bottomRight" activeCell="X3029" sqref="X3029"/></sheetView></sheetViews></worksheet>`;
   const out = patchPowerSolarParkSheetView(xml);
   assert.match(out, /topLeftCell="B2"/);
   assert.match(out, /activeCell="A2"/);
-  assert.doesNotMatch(out, /pane="topRight"/);
+  assert.doesNotMatch(out, /<sheetViews><selection/);
+  assert.match(out, /<sheetView[^>]*>[\s\S]*<selection pane="bottomLeft" activeCell="A2"/);
 });

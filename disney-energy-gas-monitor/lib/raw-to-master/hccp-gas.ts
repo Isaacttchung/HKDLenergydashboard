@@ -287,15 +287,17 @@ export async function applyHccpGasManualFields(
     MASTER_SHEETS_DIR,
     POWER_SOLAR_MASTER_FILENAME,
   );
+  const { access } = await import("fs/promises");
   try {
-    await updatePowerSolarContextColumns(powerSolarPath, {
-      dataDate: input.consumptionDate,
-      overallOccupancy: overall,
-      atten: input.fields.atten,
-    });
+    await access(powerSolarPath);
   } catch {
-    // Power Solar master may be absent on partial hosts; gas save still succeeds.
+    return { consumptionDate: input.consumptionDate, overallOccupancy: overall };
   }
+  await updatePowerSolarContextColumns(powerSolarPath, {
+    dataDate: input.consumptionDate,
+    overallOccupancy: overall,
+    atten: input.fields.atten,
+  });
 
   return { consumptionDate: input.consumptionDate, overallOccupancy: overall };
 }
