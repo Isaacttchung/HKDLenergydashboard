@@ -142,7 +142,7 @@ export async function mergeWorkbookFromPristine(
     if (sheetName === "WebSS_Data") {
       merged = removeWorksheetAutoFilter(merged);
       merged = patchWebSsDataSheetView(merged);
-    } else if (POWER_SOLAR_DATA_SHEETS.has(sheetName)) {
+    } else if (POWER_SOLAR_DATA_SHEETS.has(sheetName) && dimensionRef) {
       merged = patchWorksheetAutoFilterGrowRowsOnly(oXml, merged, dimensionRef);
       if (sheetName === "Park") {
         merged = dropWorksheetCellsFromColumn(merged, "AC");
