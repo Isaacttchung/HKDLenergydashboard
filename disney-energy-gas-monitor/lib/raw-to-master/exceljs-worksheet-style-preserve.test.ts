@@ -140,6 +140,20 @@ test("patchPowerSolarParkColumnChrome trims styled cols beyond AB", () => {
   assert.doesNotMatch(out, /min="37"/);
 });
 
+test("mergeWorksheetPreservingCellStyles keeps pristine row s= for Park rows", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="2" s="1" customFormat="1"><c r="A2" s="10"><v>1</v></c></row>
+  </sheetData></worksheet>`;
+  const written = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="2" s="73" customFormat="1"><c r="A2" s="99"><v>1</v></c></row>
+  </sheetData></worksheet>`;
+  const out = mergeWorksheetPreservingCellStyles(pristine, written, {
+    preferPristineRowAttrs: true,
+  });
+  assert.match(out, /<row r="2" s="1"/);
+  assert.doesNotMatch(out, /r="2" s="73"/);
+});
+
 test("patchPowerSolarParkSheetView resets frozen pane anchor", () => {
   const xml = `<?xml version="1.0"?><worksheet><sheetViews><sheetView><pane topLeftCell="W3046"/><selection pane="topRight" activeCell="U58" sqref="U58"/></sheetView></sheetViews></worksheet>`;
   const out = patchPowerSolarParkSheetView(xml);

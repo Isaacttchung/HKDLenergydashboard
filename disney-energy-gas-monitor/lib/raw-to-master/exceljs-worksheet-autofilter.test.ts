@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  filterDatabaseDimensionGrowRowsOnlyPark,
+  patchPowerSolarParkAutoFilterToDimension,
   patchWorksheetAutoFilter,
   patchWorksheetAutoFilterGrowRowsOnly,
   removeWorksheetAutoFilter,
@@ -28,6 +30,26 @@ test("patchWorksheetAutoFilterGrowRowsOnly keeps pristine filter columns", () =>
   );
   assert.match(out, /autoFilter ref="A1:AC3057"/);
   assert.match(out, /AC3057/);
+});
+
+test("patchPowerSolarParkAutoFilterToDimension clamps filter to AB", () => {
+  const xml = `<?xml version="1.0"?><worksheet>
+    <dimension ref="A1:AB3057"/>
+    <autoFilter ref="A1:AC3057"/>
+  </worksheet>`;
+  const out = patchPowerSolarParkAutoFilterToDimension(xml, "A1:AB3057");
+  assert.match(out, /autoFilter ref="A1:AB3057"/);
+  assert.doesNotMatch(out, /AC3057/);
+});
+
+test("filterDatabaseDimensionGrowRowsOnlyPark uses dimension end column", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><autoFilter ref="A1:AC2592"/></worksheet>`;
+  const out = filterDatabaseDimensionGrowRowsOnlyPark(
+    pristine,
+    "A1:AB3057",
+  );
+  assert.match(out, /A1:AB3057/);
+  assert.doesNotMatch(out, /AC/);
 });
 
 test("removeWorksheetAutoFilter strips worksheet filter tag", () => {

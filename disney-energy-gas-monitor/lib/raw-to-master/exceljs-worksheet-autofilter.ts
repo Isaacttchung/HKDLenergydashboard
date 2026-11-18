@@ -101,6 +101,28 @@ export function patchWorksheetAutoFilterGrowRowsOnly(
 }
 
 /** FilterDatabase patch input: row grows, column span fixed to pristine autoFilter. */
+/**
+ * Park data ends at AB; pristine filter through AC paints empty columns and
+ * triggers repair when dimension ends at AB.
+ */
+export function filterDatabaseDimensionGrowRowsOnlyPark(
+  pristineWorksheetXml: string,
+  dimensionRef: string,
+): string {
+  const bounds = parseWorksheetDimension(dimensionRef);
+  if (!bounds) return dimensionRef;
+
+  const pristineRef = pristineWorksheetXml.match(
+    /<autoFilter ref="([^"]+)"([^>]*)\/>/,
+  )?.[1];
+  const base = pristineRef ? parseAutoFilterRange(pristineRef) : null;
+  const startCol = base?.startCol ?? bounds.startCol;
+  const startRow = base?.startRow ?? bounds.startRow;
+  const endRow = Math.max(base?.endRow ?? bounds.endRow, bounds.endRow);
+  return `${startCol}${startRow}:${bounds.endCol}${endRow}`;
+}
+
+/** Grow filter named range rows only; keep pristine column end. */
 export function filterDatabaseDimensionGrowRowsOnly(
   pristineWorksheetXml: string,
   dimensionRef: string,
@@ -120,6 +142,37 @@ export function filterDatabaseDimensionGrowRowsOnly(
 }
 
 /** WebSS pristine master has no worksheet filter; ExcelJS or prior patches must not leave one on. */
+/** Park: filter must not extend past the sheet dimension (AB). */
+export function patchPowerSolarParkAutoFilterToDimension(
+  worksheetXml: string,
+  dimensionRef: string,
+): string {
+  const bounds = parseWorksheetDimension(dimensionRef);
+  if (!bounds) return worksheetXml;
+
+  const filterMatch = worksheetXml.match(
+    /<autoFilter ref="([^"]+)"([^>]*)\/>/,
+  );
+  if (!filterMatch) return worksheetXml;
+
+  const current = parseAutoFilterRange(filterMatch[1]!);
+  if (!current) return worksheetXml;
+
+  const endRow = Math.max(current.endRow, bounds.endRow);
+  const newRef = formatAutoFilterRef(
+    current.startCol,
+    current.startRow,
+    bounds.endCol,
+    endRow,
+  );
+  if (newRef === filterMatch[1]) return worksheetXml;
+
+  return worksheetXml.replace(
+    /<autoFilter ref="[^"]+"([^>]*)\/>/,
+    (_full, tail: string) => `<autoFilter ref="${newRef}"${tail}/>`,
+  );
+}
+
 export function removeWorksheetAutoFilter(worksheetXml: string): string {
   return worksheetXml
     .replace(/\s*<autoFilter[^>]*\/>\s*/g, "\n")

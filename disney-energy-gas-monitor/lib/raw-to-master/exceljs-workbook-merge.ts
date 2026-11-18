@@ -9,6 +9,8 @@ import {
 import { patchFilterDatabaseDefinedName } from "@/lib/raw-to-master/exceljs-workbook-defined-names";
 import {
   filterDatabaseDimensionGrowRowsOnly,
+  filterDatabaseDimensionGrowRowsOnlyPark,
+  patchPowerSolarParkAutoFilterToDimension,
   patchWorksheetAutoFilter,
   patchWorksheetAutoFilterGrowRowsOnly,
   removeWorksheetAutoFilter,
@@ -146,9 +148,11 @@ export async function mergeWorkbookFromPristine(
       sheetName === GAS_METER_SHEET_NAME
         ? GAS_METER_TEMPLATE_STYLE_COLUMNS
         : undefined;
+    const preferPristineRowAttrs = sheetName === "Park";
     let merged = mergeWorksheetPreservingCellStyles(oXml, wXml, {
       preserveColumnValues: preserveLeading,
       forceTemplateStyleColumns,
+      preferPristineRowAttrs,
     });
     if (sheetName === GAS_METER_SHEET_NAME) {
       merged = patchGasMeterReadingMeterColumnStyles(merged);
@@ -159,6 +163,11 @@ export async function mergeWorkbookFromPristine(
     } else if (POWER_SOLAR_DATA_SHEETS.has(sheetName) && dimensionRef) {
       merged = patchWorksheetAutoFilterGrowRowsOnly(oXml, merged, dimensionRef);
       if (sheetName === "Park") {
+        merged = patchPowerSolarParkAutoFilterToDimension(
+          merged,
+          merged.match(/<dimension ref="([^"]+)"[^/]*\/>/)?.[1] ??
+            dimensionRef,
+        );
         merged = dropWorksheetCellsFromColumn(merged, "AC");
         merged = patchPowerSolarParkColumnChrome(merged);
         merged = patchPowerSolarParkSheetView(merged);
@@ -171,9 +180,11 @@ export async function mergeWorkbookFromPristine(
     const mergedDimension =
       merged.match(/<dimension ref="([^"]+)"[^/]*\/>/)?.[1] ?? dimensionRef;
     const filterDimension =
-      POWER_SOLAR_DATA_SHEETS.has(sheetName) && mergedDimension
-        ? filterDatabaseDimensionGrowRowsOnly(oXml, mergedDimension)
-        : mergedDimension;
+      sheetName === "Park" && mergedDimension
+        ? filterDatabaseDimensionGrowRowsOnlyPark(oXml, mergedDimension)
+        : POWER_SOLAR_DATA_SHEETS.has(sheetName) && mergedDimension
+          ? filterDatabaseDimensionGrowRowsOnly(oXml, mergedDimension)
+          : mergedDimension;
     if (filterDimension && workbookXml) {
       workbookXml = patchFilterDatabaseDefinedName(
         workbookXml,

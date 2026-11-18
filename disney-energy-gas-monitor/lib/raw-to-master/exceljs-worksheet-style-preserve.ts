@@ -292,7 +292,29 @@ export type MergeWorksheetStyleOptions = {
   preserveColumnValues?: ReadonlySet<string>;
   /** Always use pristine / previous-row style, ignoring ExcelJS `s=`. */
   forceTemplateStyleColumns?: ReadonlySet<string>;
+  /** Keep pristine `<row s=…>` (ExcelJS row styles paint green/borders across AC+). */
+  preferPristineRowAttrs?: boolean;
 };
+
+function mergeRowAttrs(
+  rowNum: string,
+  writtenAttrs: string,
+  pristineRow: { attrs: string; inner: string } | undefined,
+  pristineRows: Map<string, { attrs: string; inner: string }>,
+  templateRowNum: string,
+  preferPristineRowAttrs: boolean | undefined,
+): string {
+  if (!preferPristineRowAttrs) {
+    return writtenAttrs || pristineRow?.attrs || "";
+  }
+  return (
+    pristineRow?.attrs ??
+    pristineRows.get(String(Number(rowNum) - 1))?.attrs ??
+    pristineRows.get(templateRowNum)?.attrs ??
+    writtenAttrs ??
+    ""
+  );
+}
 
 function mergeRowXml(
   rowNum: string,
@@ -464,7 +486,14 @@ export function mergeWorksheetPreservingCellStyles(
     mergedRows.push(
       mergeRowXml(
         rowNum,
-        w.attrs || p?.attrs || "",
+        mergeRowAttrs(
+          rowNum,
+          w.attrs,
+          p,
+          pRows,
+          templateRowNum,
+          options?.preferPristineRowAttrs,
+        ),
         w.inner,
         p?.inner,
         prevTemplate,
@@ -549,13 +578,14 @@ export function patchPowerSolarParkSheetView(worksheetXml: string): string {
     /topLeftCell="[^"]+"/g,
     'topLeftCell="B2"',
   );
+  out = out.replace(/\s*<selection[^/]*\/>\s*/g, "");
   out = out.replace(
-    /<selection[^/]*pane="topRight"[^/]*\/>/g,
-    '<selection pane="bottomRight" activeCell="A2" sqref="A2"/>',
+    /activePane="[^"]+"/,
+    'activePane="bottomLeft"',
   );
   out = out.replace(
-    /activePane="bottomRight"/,
-    'activePane="bottomLeft"',
+    /(<sheetView[^>]*>)/,
+    '$1<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>',
   );
   return out;
 }
