@@ -4,6 +4,7 @@ import {
   dropWorksheetCellsFromColumn,
   ensureTrailingDateColumnWidth,
   mergeWorksheetPreservingCellStyles,
+  patchCcpTotalColumnCellStyles,
   patchGasMeterReadingMeterColumnStyles,
   patchPowerSolarParkColumnChrome,
   patchPowerSolarParkSheetView,
@@ -93,6 +94,16 @@ test("mergeWorksheetPreservingCellStyles rejects contaminated pristine s=90 on g
   });
   assert.match(out, /r="J2" s="22"/);
   assert.doesNotMatch(out, /s="90"/);
+});
+
+test("patchCcpTotalColumnCellStyles normalizes yellow tail on column I", () => {
+  const xml = `<?xml version="1.0"?><worksheet><sheetData>
+    <row r="3058"><c r="I3058" s="162"><v>52059</v></c></row>
+    <row r="3059"><c r="I3059" s="185"><v>63591</v></c></row>
+  </sheetData></worksheet>`;
+  const out = patchCcpTotalColumnCellStyles(xml);
+  assert.match(out, /r="I3059" s="162"/);
+  assert.doesNotMatch(out, /s="185"/);
 });
 
 test("patchGasMeterReadingMeterColumnStyles strips s=90 using row above", () => {

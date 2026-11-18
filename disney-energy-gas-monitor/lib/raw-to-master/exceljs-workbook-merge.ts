@@ -20,6 +20,7 @@ import {
   dropWorksheetCellsFromColumn,
   ensureTrailingDateColumnWidth,
   mergeWorksheetPreservingCellStyles,
+  patchCcpTotalColumnCellStyles,
   patchGasMeterReadingMeterColumnStyles,
   patchPowerSolarParkColumnChrome,
   patchPowerSolarParkSheetView,
@@ -34,6 +35,7 @@ const POWER_SOLAR_DATA_SHEETS = new Set([
 ]);
 
 const GAS_METER_TEMPLATE_STYLE_COLUMNS = new Set(["I", "J", "K", "L"]);
+const CCP_TOTAL_TEMPLATE_STYLE_COLUMNS = new Set(["I"]);
 
 /** On-disk master bytes used as the merge baseline for the current edit session. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
@@ -147,7 +149,9 @@ export async function mergeWorkbookFromPristine(
     const forceTemplateStyleColumns =
       sheetName === GAS_METER_SHEET_NAME
         ? GAS_METER_TEMPLATE_STYLE_COLUMNS
-        : undefined;
+        : sheetName === "CCP"
+          ? CCP_TOTAL_TEMPLATE_STYLE_COLUMNS
+          : undefined;
     const preferPristineRowAttrs = sheetName === "Park";
     let merged = mergeWorksheetPreservingCellStyles(oXml, wXml, {
       preserveColumnValues: preserveLeading,
@@ -162,7 +166,9 @@ export async function mergeWorkbookFromPristine(
       merged = ensureTrailingDateColumnWidth(merged);
     } else if (POWER_SOLAR_DATA_SHEETS.has(sheetName) && dimensionRef) {
       merged = patchWorksheetAutoFilterGrowRowsOnly(oXml, merged, dimensionRef);
-      if (sheetName === "Park") {
+      if (sheetName === "CCP") {
+        merged = patchCcpTotalColumnCellStyles(merged);
+      } else if (sheetName === "Park") {
         merged = patchPowerSolarParkAutoFilterToDimension(
           merged,
           merged.match(/<dimension ref="([^"]+)"[^/]*\/>/)?.[1] ??

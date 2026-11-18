@@ -157,18 +157,26 @@ function replaceCellStyleAttr(attrs: string, style: string): string {
   return `${style} ${trimmed}`;
 }
 
-/**
- * Gas Meter Reading: fix tail rows even when a prior save already committed `s="90"`.
- * Copies the style from the same column on the previous row for I–L.
- */
-export function patchGasMeterReadingMeterColumnStyles(
+function patchTailColumnCellStyles(
   worksheetXml: string,
+  columns: ReadonlySet<string>,
+  options?: {
+    /** Copy previous-row style when current xf is in this set. */
+    badStyleIds?: ReadonlySet<string>;
+    /**
+     * For a column (e.g. CCP `I`): when the row above uses a "good" xf, fix
+     * tail cells that use any other xf.
+     */
+    normalizeWhenPrevGood?: ReadonlySet<string>;
+    normalizeColumns?: ReadonlySet<string>;
+  },
 ): string {
   const dataMatch = worksheetXml.match(
     /<sheetData([\s\S]*?)<\/sheetData>/,
   );
   if (!dataMatch) return worksheetXml;
 
+  const badStyleIds = options?.badStyleIds ?? EXCELJS_BAD_TAIL_CELL_STYLE_IDS;
   const lastStyleByCol = new Map<string, string>();
   const fixedRows: string[] = [];
 
@@ -188,19 +196,36 @@ export function patchGasMeterReadingMeterColumnStyles(
       let attrs = cellM[3] ?? "";
       const body = cellM[4] ?? "";
 
-      if (
-        GAS_METER_READING_STYLE_COLUMNS.includes(
-          col as (typeof GAS_METER_READING_STYLE_COLUMNS)[number],
-        )
-      ) {
+      if (columns.has(col)) {
         const styleId = styleAttrFrom(attrs)?.match(/s="(\d+)"/)?.[1];
         const prevStyle = lastStyleByCol.get(col);
+        let usePrev = false;
         if (
           styleId &&
-          GAS_METER_BAD_CELL_STYLE_IDS.has(styleId) &&
+          badStyleIds.has(styleId) &&
           prevStyle &&
           rowIndex > 2
         ) {
+          usePrev = true;
+        }
+        if (
+          !usePrev &&
+          options?.normalizeWhenPrevGood &&
+          options.normalizeColumns?.has(col) &&
+          styleId &&
+          prevStyle &&
+          rowIndex > 2
+        ) {
+          const prevId = prevStyle.match(/s="(\d+)"/)?.[1];
+          if (
+            prevId &&
+            options.normalizeWhenPrevGood.has(prevId) &&
+            !options.normalizeWhenPrevGood.has(styleId)
+          ) {
+            usePrev = true;
+          }
+        }
+        if (usePrev && prevStyle) {
           attrs = replaceCellStyleAttr(attrs, prevStyle);
         }
         const effective = styleAttrFrom(attrs);
@@ -214,6 +239,29 @@ export function patchGasMeterReadingMeterColumnStyles(
 
   const newData = `<sheetData>${fixedRows.join("")}</sheetData>`;
   return worksheetXml.replace(/<sheetData[\s\S]*?<\/sheetData>/, newData);
+}
+
+/**
+ * Gas Meter Reading: fix tail rows even when a prior save already committed `s="90"`.
+ * Copies the style from the same column on the previous row for I–L.
+ */
+export function patchGasMeterReadingMeterColumnStyles(
+  worksheetXml: string,
+): string {
+  return patchTailColumnCellStyles(
+    worksheetXml,
+    new Set(GAS_METER_READING_STYLE_COLUMNS),
+    { badStyleIds: EXCELJS_BAD_TAIL_CELL_STYLE_IDS },
+  );
+}
+
+/** Power Solar CCP: keep column I (area total) matching prior rows on new dates. */
+export function patchCcpTotalColumnCellStyles(worksheetXml: string): string {
+  return patchTailColumnCellStyles(worksheetXml, new Set(["I"]), {
+    badStyleIds: EXCELJS_BAD_TAIL_CELL_STYLE_IDS,
+    normalizeWhenPrevGood: CCP_TOTAL_COLUMN_GOOD_STYLE_IDS,
+    normalizeColumns: new Set(["I"]),
+  });
 }
 
 /** Drop cells from `firstUnusedCol` onward (e.g. Park AC+). */
@@ -256,10 +304,13 @@ function mergeCellAttrs(
   return `${style} ${base}`;
 }
 
-/** ExcelJS often assigns thick borders to meter tail cells; never treat as canonical. */
-const GAS_METER_BAD_CELL_STYLE_IDS = new Set(["90"]);
+/** ExcelJS tail styles (borders, yellow highlights) — never treat as canonical pristine. */
+const EXCELJS_BAD_TAIL_CELL_STYLE_IDS = new Set(["90", "47", "185"]);
 
-function gasMeterStyleAttr(
+/** CCP column I (area total) uses these xf indices on normal data rows. */
+const CCP_TOTAL_COLUMN_GOOD_STYLE_IDS = new Set(["161", "162"]);
+
+function tailTemplateStyleAttr(
   pristineAttrs: string | undefined,
   templateAttrs: string | undefined,
 ): string | null {
@@ -268,7 +319,7 @@ function gasMeterStyleAttr(
   const templateStyle = styleAttrFrom(templateAttrs ?? "");
   if (
     pristineStyle &&
-    (!pristineId || !GAS_METER_BAD_CELL_STYLE_IDS.has(pristineId))
+    (!pristineId || !EXCELJS_BAD_TAIL_CELL_STYLE_IDS.has(pristineId))
   ) {
     return pristineStyle;
   }
@@ -281,7 +332,7 @@ function mergeCellAttrsFromTemplateOnly(
   pristineAttrs: string | undefined,
   templateAttrs: string | undefined,
 ): string {
-  const style = gasMeterStyleAttr(pristineAttrs, templateAttrs) ?? "";
+  const style = tailTemplateStyleAttr(pristineAttrs, templateAttrs) ?? "";
   const base = stripStyleAttr(writtenAttrs).trim();
   if (!style) return base ? ` ${base}` : "";
   if (!base) return style;
