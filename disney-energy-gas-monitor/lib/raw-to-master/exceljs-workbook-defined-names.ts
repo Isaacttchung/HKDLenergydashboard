@@ -1,4 +1,8 @@
-import { parseWorksheetDimension } from "@/lib/raw-to-master/excel-column";
+import {
+  excelColumnFromIndex,
+  excelColumnIndex,
+  parseWorksheetDimension,
+} from "@/lib/raw-to-master/excel-column";
 
 /** Workbook sheet order index used by `localSheetId` on defined names. */
 export function sheetLocalIdByName(
@@ -12,14 +16,6 @@ export function sheetLocalIdByName(
     idx += 1;
   }
   return null;
-}
-
-function excelColumnIndex(col: string): number {
-  let index = 0;
-  for (const ch of col.toUpperCase()) {
-    index = index * 26 + (ch.charCodeAt(0) - 64);
-  }
-  return index;
 }
 
 function parseFilterDatabaseCellRef(rangeBody: string): {
@@ -68,10 +64,14 @@ export function patchFilterDatabaseDefinedName(
   const current = parseFilterDatabaseCellRef(currentBody);
   if (!current) return workbookXml;
 
-  const endCol =
-    excelColumnIndex(current.endCol) >= excelColumnIndex(bounds.endCol)
-      ? current.endCol
-      : bounds.endCol;
+  const endColIndex = Math.min(
+    Math.max(
+      excelColumnIndex(current.endCol),
+      excelColumnIndex(bounds.endCol),
+    ),
+    excelColumnIndex(bounds.endCol),
+  );
+  const endCol = excelColumnFromIndex(endColIndex);
   const endRow = Math.max(current.endRow, bounds.endRow);
   if (
     endCol === current.endCol &&

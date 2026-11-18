@@ -8,14 +8,24 @@ import {
 } from "@/lib/raw-to-master/exceljs-shared-strings";
 import { patchFilterDatabaseDefinedName } from "@/lib/raw-to-master/exceljs-workbook-defined-names";
 import {
+  filterDatabaseDimensionGrowRowsOnly,
   patchWorksheetAutoFilter,
+  patchWorksheetAutoFilterGrowRowsOnly,
   removeWorksheetAutoFilter,
 } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
 import {
+  dropWorksheetCellsFromColumn,
   mergeWorksheetPreservingCellStyles,
   patchPowerSolarParkSheetView,
   patchWebSsDataSheetView,
 } from "@/lib/raw-to-master/exceljs-worksheet-style-preserve";
+
+const POWER_SOLAR_DATA_SHEETS = new Set([
+  "CCP",
+  "HCCP",
+  "Hotel",
+  "Park",
+]);
 
 /** On-disk master bytes used as the merge baseline for the current edit session. */
 const pristineWorkbookBuffer = new Map<string, Buffer>();
@@ -132,21 +142,28 @@ export async function mergeWorkbookFromPristine(
     if (sheetName === "WebSS_Data") {
       merged = removeWorksheetAutoFilter(merged);
       merged = patchWebSsDataSheetView(merged);
+    } else if (POWER_SOLAR_DATA_SHEETS.has(sheetName)) {
+      merged = patchWorksheetAutoFilterGrowRowsOnly(oXml, merged, dimensionRef);
+      if (sheetName === "Park") {
+        merged = dropWorksheetCellsFromColumn(merged, "AC");
+        merged = patchPowerSolarParkSheetView(merged);
+      }
     } else if (dimensionRef) {
       merged = patchWorksheetAutoFilter(merged, dimensionRef);
-    }
-    if (sheetName === "Park") {
-      merged = patchPowerSolarParkSheetView(merged);
     }
     out.file(`xl/${oRel}`, merged);
 
     const mergedDimension =
       merged.match(/<dimension ref="([^"]+)"[^/]*\/>/)?.[1] ?? dimensionRef;
-    if (mergedDimension && workbookXml) {
+    const filterDimension =
+      POWER_SOLAR_DATA_SHEETS.has(sheetName) && mergedDimension
+        ? filterDatabaseDimensionGrowRowsOnly(oXml, mergedDimension)
+        : mergedDimension;
+    if (filterDimension && workbookXml) {
       workbookXml = patchFilterDatabaseDefinedName(
         workbookXml,
         sheetName,
-        mergedDimension,
+        filterDimension,
       );
     }
 

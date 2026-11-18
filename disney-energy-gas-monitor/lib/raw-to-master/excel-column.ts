@@ -7,6 +7,18 @@ export function excelColumnIndex(col: string): number {
   return index;
 }
 
+/** 1-based index → `A`, `AB`, … */
+export function excelColumnFromIndex(index: number): string {
+  let n = index;
+  let result = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    result = String.fromCharCode(65 + rem) + result;
+    n = Math.floor((n - 1) / 26);
+  }
+  return result;
+}
+
 /** Sort Excel column letters in sheet column order (not ASCII: `AA` after `Z`). */
 export function sortExcelColumns(cols: Iterable<string>): string[] {
   return [...cols].sort(

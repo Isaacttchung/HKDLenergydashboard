@@ -5,6 +5,7 @@
  */
 
 import {
+  excelColumnIndex,
   maxColumnIndexInColsXml,
   previousExcelColumn,
   sortExcelColumns,
@@ -133,6 +134,44 @@ function rowHasCellPayload(inner: string): boolean {
   );
 }
 
+/** Excel repair when shared formulas lose `ca="1"` from the pristine sheet. */
+function mergeFormulaInnerWithPristine(
+  writtenInner: string,
+  pristineInner: string | undefined,
+): string {
+  if (!pristineInner?.includes('ca="1"') || !writtenInner.includes("<f")) {
+    return writtenInner;
+  }
+  if (writtenInner.includes('ca="1"')) return writtenInner;
+  return writtenInner.replace(/<f /g, (tag) =>
+    tag.includes('ca="1"') ? tag : tag.replace("<f ", '<f ca="1" '),
+  );
+}
+
+/** Drop cells from `firstUnusedCol` onward (e.g. Park AC+). */
+export function dropWorksheetCellsFromColumn(
+  worksheetXml: string,
+  firstUnusedCol: string,
+): string {
+  const minIdx = excelColumnIndex(firstUnusedCol);
+  return worksheetXml.replace(
+    /<row r="(\d+)"([^>]*)>([\s\S]*?)<\/row>/g,
+    (_row, rowNum, rowAttrs, inner) => {
+      const cells: string[] = [];
+      let m: RegExpExecArray | null;
+      const re = new RegExp(CELL_RE.source, "g");
+      while ((m = re.exec(inner)) !== null) {
+        const col = m[1]!;
+        if (excelColumnIndex(col) >= minIdx) continue;
+        const attrs = m[3] ?? "";
+        const body = m[4] ?? "";
+        cells.push(buildCellXml(col, rowNum, attrs, body));
+      }
+      return `<row r="${rowNum}"${rowAttrs}>${cells.join("")}</row>`;
+    },
+  );
+}
+
 function mergeCellAttrs(
   writtenAttrs: string,
   pristineAttrs: string | undefined,
@@ -184,7 +223,11 @@ function mergeRowXml(
     }
     const templateStyle = styleTemplateAttrs(col, w, pCells, wCells, tCells);
     const attrs = mergeCellAttrs(w.attrs, pristineCell?.attrs, templateStyle);
-    parts.push(buildCellXml(col, rowNum, attrs, w.inner));
+    const inner = mergeFormulaInnerWithPristine(
+      w.inner,
+      pristineCell?.inner,
+    );
+    parts.push(buildCellXml(col, rowNum, attrs, inner));
   }
   return `<row r="${rowNum}"${rowAttrs}>${parts.join("")}</row>`;
 }

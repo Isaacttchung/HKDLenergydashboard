@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  dropWorksheetCellsFromColumn,
   mergeWorksheetPreservingCellStyles,
   patchPowerSolarParkSheetView,
   patchWebSsDataSheetView,
@@ -51,6 +52,20 @@ test("mergeWorksheetPreservingCellStyles orders columns before AA", () => {
   const idxB = out.indexOf('r="B2"');
   const idxAb = out.indexOf('r="AB2"');
   assert.ok(idxB >= 0 && idxAb >= 0 && idxB < idxAb);
+});
+
+test("mergeWorksheetPreservingCellStyles preserves shared formula ca", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><sheetData><row r="2"><c r="AB2" s="324" t="b"><f t="shared" ca="1" si="0"/><v>0</v></c></row></sheetData></worksheet>`;
+  const written = `<?xml version="1.0"?><worksheet><sheetData><row r="2"><c r="AB2" s="99" t="b"><f t="shared" si="0"/><v>0</v></c></row></sheetData></worksheet>`;
+  const out = mergeWorksheetPreservingCellStyles(pristine, written);
+  assert.match(out, /f ca="1"/);
+});
+
+test("dropWorksheetCellsFromColumn removes AC and beyond", () => {
+  const xml = `<?xml version="1.0"?><worksheet><sheetData><row r="2"><c r="AB2"><v>1</v></c><c r="AC2"><v>9</v></c></row></sheetData></worksheet>`;
+  const out = dropWorksheetCellsFromColumn(xml, "AC");
+  assert.match(out, /AB2/);
+  assert.doesNotMatch(out, /AC2/);
 });
 
 test("patchWebSsDataSheetView resets frozen pane to meter columns", () => {

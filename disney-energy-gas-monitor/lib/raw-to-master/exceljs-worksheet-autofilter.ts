@@ -32,10 +32,7 @@ export function patchWorksheetAutoFilter(
   const current = parseAutoFilterRange(filterMatch[1]!);
   if (!current) return worksheetXml;
 
-  const endCol =
-    excelColumnIndex(current.endCol) >= excelColumnIndex(bounds.endCol)
-      ? current.endCol
-      : bounds.endCol;
+  const endCol = bounds.endCol;
   const endRow = Math.max(current.endRow, bounds.endRow);
   const needsGrow =
     endCol !== current.endCol || endRow !== current.endRow;
@@ -51,6 +48,75 @@ export function patchWorksheetAutoFilter(
     /<autoFilter ref="[^"]+"([^>]*)\/>/,
     (_full, tail: string) => `<autoFilter ref="${newRef}"${tail}/>`,
   );
+}
+
+/**
+ * Power Solar sheets: grow autoFilter rows when dates are added but keep the
+ * pristine column span (Park must stay through AC, not ExcelJS column AJ).
+ */
+export function patchWorksheetAutoFilterGrowRowsOnly(
+  pristineWorksheetXml: string,
+  worksheetXml: string,
+  dimensionRef: string,
+): string {
+  const filterMatch = worksheetXml.match(
+    /<autoFilter ref="([^"]+)"([^>]*)\/>/,
+  );
+  if (!filterMatch) return worksheetXml;
+
+  const bounds = parseWorksheetDimension(dimensionRef);
+  if (!bounds) return worksheetXml;
+
+  const pristineRef = pristineWorksheetXml.match(
+    /<autoFilter ref="([^"]+)"([^>]*)\/>/,
+  )?.[1];
+  const base = parseAutoFilterRange(
+    pristineRef ?? filterMatch[1]!,
+  );
+  if (!base) return worksheetXml;
+
+  const current = parseAutoFilterRange(filterMatch[1]!);
+  const endRow = Math.max(base.endRow, bounds.endRow);
+  const endCol = base.endCol;
+  if (
+    current &&
+    current.endRow === endRow &&
+    current.endCol === endCol &&
+    current.startRow === base.startRow &&
+    current.startCol === base.startCol
+  ) {
+    return worksheetXml;
+  }
+
+  const newRef = formatAutoFilterRef(
+    base.startCol,
+    base.startRow,
+    endCol,
+    endRow,
+  );
+  return worksheetXml.replace(
+    /<autoFilter ref="[^"]+"([^>]*)\/>/,
+    (_full, tail: string) => `<autoFilter ref="${newRef}"${tail}/>`,
+  );
+}
+
+/** FilterDatabase patch input: row grows, column span fixed to pristine autoFilter. */
+export function filterDatabaseDimensionGrowRowsOnly(
+  pristineWorksheetXml: string,
+  dimensionRef: string,
+): string {
+  const bounds = parseWorksheetDimension(dimensionRef);
+  if (!bounds) return dimensionRef;
+
+  const pristineRef = pristineWorksheetXml.match(
+    /<autoFilter ref="([^"]+)"([^>]*)\/>/,
+  )?.[1];
+  const base = pristineRef
+    ? parseAutoFilterRange(pristineRef)
+  : null;
+  if (!base) return dimensionRef;
+
+  return `${base.startCol}${base.startRow}:${base.endCol}${Math.max(base.endRow, bounds.endRow)}`;
 }
 
 /** WebSS pristine master has no worksheet filter; ExcelJS or prior patches must not leave one on. */

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   patchWorksheetAutoFilter,
+  patchWorksheetAutoFilterGrowRowsOnly,
   removeWorksheetAutoFilter,
 } from "@/lib/raw-to-master/exceljs-worksheet-autofilter";
 
@@ -15,6 +16,18 @@ test("patchWorksheetAutoFilter keeps original header row when growing", () => {
   const xml = `<?xml version="1.0"?><worksheet><dimension ref="A1:S3058"/><autoFilter ref="A2:S2145"/></worksheet>`;
   const out = patchWorksheetAutoFilter(xml, "A1:S3058");
   assert.match(out, /autoFilter ref="A2:S3058"/);
+});
+
+test("patchWorksheetAutoFilterGrowRowsOnly keeps pristine filter columns", () => {
+  const pristine = `<?xml version="1.0"?><worksheet><autoFilter ref="A1:AC2592"/></worksheet>`;
+  const merged = `<?xml version="1.0"?><worksheet><dimension ref="A1:AJ3057"/><autoFilter ref="A1:AJ3057"/></worksheet>`;
+  const out = patchWorksheetAutoFilterGrowRowsOnly(
+    pristine,
+    merged,
+    "A1:AJ3057",
+  );
+  assert.match(out, /autoFilter ref="A1:AC3057"/);
+  assert.match(out, /AC3057/);
 });
 
 test("removeWorksheetAutoFilter strips worksheet filter tag", () => {
